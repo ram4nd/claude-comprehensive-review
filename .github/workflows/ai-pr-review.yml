@@ -77,6 +77,10 @@ jobs:
           FORCE_FULL_DIFF: ${{ contains(github.event.pull_request.labels.*.name, 'ai-review-rescan') }}
         with:
           approval-ceiling: ${{ vars.AI_REVIEW_APPROVAL_CEILING || 'request-changes' }}
+          suppress-walkthrough: ${{ vars.AI_REVIEW_SUPPRESS_WALKTHROUGH || 'false' }}
+          finding-badges: ${{ vars.AI_REVIEW_FINDING_BADGES || 'true' }}
+          cost-ceiling-unpriced: ${{ vars.AI_REVIEW_COST_CEILING_UNPRICED || 'warn' }}
+          policy-source: ${{ vars.AI_REVIEW_POLICY_SOURCE || 'base-ref' }}
           # vars.AI_REVIEW_IMAGE_TAG pins the container image (default 'latest';
           # this repo dogfoods 'dev' ahead of the Epic 4 default-engine flip).
           image-tag: ${{ vars.AI_REVIEW_IMAGE_TAG || 'latest' }}
