@@ -6,7 +6,7 @@ on:
   # Maintainer-gated review of a fork PR.  The automatic pull_request trigger
   # cannot see secrets on fork PRs, so the `review` job skips them and a
   # maintainer runs this instead, after reading the diff:
-  #   gh workflow run ai-pr-review.yml -f pr_number=<N> -f head_sha=<reviewed sha> [-f review_mode=full]
+  #   gh workflow run ai-pr-review.yml --repo <owner>/<repo> -f pr_number=<N> -f head_sha=<reviewed sha> [-f review_mode=full]
   # Only users with write access can dispatch a workflow.
   workflow_dispatch:
     inputs:
@@ -57,7 +57,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          msg="Fork PR: no automatic AI review ran because this trigger has no secrets. A maintainer must read the diff, then run: gh workflow run ai-pr-review.yml -f pr_number=${PR_NUMBER} -f head_sha=${HEAD_SHA}"
+          msg="Fork PR: no automatic AI review ran because this trigger has no secrets. A maintainer must read the diff, then run: gh workflow run ai-pr-review.yml --repo ${GITHUB_REPOSITORY} -f pr_number=${PR_NUMBER} -f head_sha=${HEAD_SHA}"
           echo "::notice title=No AI review for fork PR::${msg}"
           echo "${msg}" >> "$GITHUB_STEP_SUMMARY"
 
