@@ -52,15 +52,13 @@ The orchestrator is a software-engineering actor: it spawns subagents, calls pro
 
 Detect the git hosting provider from the remote URL. This determines which CLI tool and API to use for all PR/MR operations.
 
-0. **Local-mode skip.** Set `REMOTE_FLAGS=true` if at least one of `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, or `--read-back` was passed (the same flag set that gates Phase 4); otherwise `REMOTE_FLAGS=false`. If `REMOTE_FLAGS=false` AND `--provider` was not passed, skip the rest of Provider Detection (steps 1–5, including CLI validation) and set:
-   - PROVIDER: `none`
-   - PR_TERM: "PR"
-   - PR_TERM_LONG: "pull request"
-   - CLI_TOOL: empty (no provider CLI is required in local mode; the only remaining `gh` call is the optional `github-release` suppression verify in Phase 2 step 2d, which fails open when `gh` is missing)
-   - REPO_SLUG: best effort, never fatal. Use the same `git remote get-url origin | sed ...` extraction as step 4; if there is no `origin` remote or the result does not match `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`, use `local/<basename of git rev-parse --show-toplevel>` when that basename matches `^[a-zA-Z0-9._-]+$`, and the constant `local/repo` otherwise. The value must always pass the slug regex: Phase 5 interpolates it into a bash assignment (`MEM_TITLE`) and the claude-mem search query, so an unvalidated directory name could inject shell syntax.
+0. **Local-mode detection.** Set `REMOTE_FLAGS=true` if at least one of `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, or `--read-back` was passed (the same flag set that gates Phase 4), otherwise `REMOTE_FLAGS=false`. When `REMOTE_FLAGS=false`, detection is best effort and never fatal. Run steps 1–4 as written, with these relaxations:
+   - Step 3d runs its `gh auth status` and `glab auth status` probes only when that CLI is on `PATH` (`command -v gh`, `command -v glab`). If no provider matches, set `PROVIDER=none` and continue instead of stopping. Step 4 then uses PR_TERM "PR", PR_TERM_LONG "pull request", and an empty CLI_TOOL.
+   - Step 5 (CLI validation) is skipped.
+   - REPO_SLUG: best effort, never fatal. Use the same `git remote get-url origin | sed ...` extraction as step 4; if there is no `origin` remote or the result does not match `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`, use `local/<basename of git rev-parse --show-toplevel>` when that basename matches `^[a-zA-Z0-9._-]+$`, and the constant `local/repo` otherwise. The value must always pass the slug regex: Phase 5 interpolates it into a bash assignment (`MEM_TITLE`) and the claude-mem search query, so an unvalidated directory name could inject shell syntax. Use this one validated value everywhere, including the claude-mem search in Phase 0 step 5b and `MEM_TITLE` in Phase 5. Set `REPO_SLUG_FALLBACK=true` when either `local/` fallback was used (otherwise `false`): the claude-mem search and save are then skipped, so unrelated repositories never share prior-review history.
    - PROJECT_ID: not resolved.
 
-   A purely local review needs no hosting provider: Phase 4/4b are skipped, issue-linker is skipped (PROVIDER is not `github`), and PROVIDERS.md is not read. This lets local reviews run on hosts without `gh`/`glab` and on remotes the auto-detection does not recognize (e.g. `git.drupal.org`, self-hosted Gitea). Pass `--provider <name>` to force detection and the `gh`/`glab` check in local mode (e.g. to enable issue-linker on GitHub); the `jq` and Bitbucket credential checks in step 5 still only apply when `REMOTE_FLAGS=true`.
+   A purely local review therefore never stops on a missing `gh`/`glab` or an unrecognized remote (e.g. `git.drupal.org`, self-hosted Gitea). issue-linker keeps running when PROVIDER is `github`, and it already returns `NONE` when `gh` is missing or not authenticated (see `agents/issue-linker.md`). Phase 4/4b are skipped and PROVIDERS.md is not read. `--provider <name>` only overrides the detected provider. In local mode it does not trigger the CLI check in step 5.
 
 1. Extract the remote URL: `git remote get-url origin 2>/dev/null`
 2. If `--provider <name>` was passed: if the value is not one of `github`, `gitlab`, `bitbucket`, report "Error: Unknown provider '<name>'. Valid values: github, gitlab, bitbucket." and stop. Otherwise, use that value and skip auto-detection.
@@ -81,7 +79,7 @@ Detect the git hosting provider from the remote URL. This determines which CLI t
    - REPO_SLUG: extract from remote URL via `git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^:/]*\/[^:/]*\)\.git$|\1|; s|.*[:/]\([^:/]*\/[^:/]*\)$|\1|'`. Validate it matches `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`; if not, report "Error: Could not extract valid repository slug from remote URL." and stop. Used by Bitbucket API URLs.
    - PROJECT_ID (gitlab only, **deferred**): not resolved here. Resolved in Phase 4b when inline comments are actually needed. Skip if `REMOTE_FLAGS=false` or PROVIDER is not gitlab.
 
-5. Validate CLI tool availability (runs whenever steps 1–4 ran, regardless of whether provider was auto-detected or manually specified via `--provider`):
+5. Validate CLI tool availability (runs only when `REMOTE_FLAGS=true`, regardless of whether the provider was auto-detected or manually specified via `--provider`):
    - GitHub: `gh --version` must succeed. If not: "Error: gh CLI is required for GitHub repositories. Install: https://cli.github.com/"
    - GitLab: `glab --version` must succeed. If not: "Error: glab CLI is required for GitLab repositories. Install: https://gitlab.com/gitlab-org/cli"
    - GitLab/Bitbucket: `jq --version` must succeed **unless `REMOTE_FLAGS=false`** (no JSON parsing needed in local mode). If not: "Error: jq is required for GitLab/Bitbucket repositories. Install: https://jqlang.org/"
@@ -100,7 +98,7 @@ Note: GitHub inline review posting uses `gh api` (see OP: Post inline review in 
 1. Parse `$ARGUMENTS`:
    - Extract `--base <branch>` if present, otherwise use the detected default branch (from the pre-flight "Branch context" block above), falling back to `origin/main`. The detected value is a remote-tracking ref (e.g. `origin/main`), not a local branch name, so diffs and commit logs read against the freshest known state of the default branch rather than a possibly-stale local copy. When passing this value as a `--base`/`--target-branch` argument to a provider CLI (see the `--create-pr` OP), strip the leading `<remote>/` prefix first: GitHub/GitLab expect a bare branch name there, not a git ref path.
    - Extract `--pr <number>` if present — set PR_NUMBER and enable external review mode
-   - Extract `--provider <name>` if present — passed to Provider Detection (valid: `github`, `gitlab`, `bitbucket`). Passing it also forces Provider Detection to run in local mode (see Provider Detection step 0).
+   - Extract `--provider <name>` if present — passed to Provider Detection (valid: `github`, `gitlab`, `bitbucket`).
    - Note mode flags: `--quick`, `--security-only`, `--summary-only`, `--create-pr`,
      `--no-post`/`--local`, `--post-summary`, `--post-findings`, `--no-findings`, `--publish`, `--draft`, `--read-back`, `--no-enrich-context`, `--no-mem`, `--no-suppress`, `--no-cost`
    - Extract `--output-file <path>` if present — set OUTPUT_FILE to the given path for Phase 5 file write
@@ -338,10 +336,10 @@ Note: GitHub inline review posting uses `gh api` (see OP: Post inline review in 
    of changed files for a CLAUDE.md (stop at repo root); concatenate matches up to the
    ~500-token cap. If none exists: "No project-specific context available."
 
-5b. **Retrieve prior review history** (skip if MEM_AVAILABLE is false, or `--quick`, `--summary-only`, or `--security-only` mode is active):
+5b. **Retrieve prior review history** (skip if MEM_AVAILABLE is false, `REPO_SLUG_FALLBACK=true`, or `--quick`, `--summary-only`, or `--security-only` mode is active):
    - Search for prior reviews of this project using the MCP tool:
      `mcp__plugin_claude-mem_mcp-search__search` with `query: "Review: <REPO_SLUG>"` and `limit: 5`.
-     (REPO_SLUG is the `owner/repo` value from the pre-flight context.)
+     (REPO_SLUG is the validated value from Provider Detection, never the raw pre-flight remote.)
    - If the MCP tool fails: set PRIOR_REVIEW_CONTEXT to empty string and continue silently (no curl fallback).
    - If results are returned, fetch full details via `mcp__plugin_claude-mem_mcp-search__get_observations`, passing the `ids` field from each search result entry.
      If `get_observations` fails: use the title and timestamp fields from the search index entries directly.
@@ -655,11 +653,11 @@ Produce slices via `mktemp /tmp/cr-slice-<agent>-XXXXXXXX.txt` and `git diff <ba
 
 | Flag | Agents that run |
 |------|-----------------|
-| (none) | All always-run + all triggered conditional agents + CVE check if manifest files changed + static analyzers if binaries available. issue-linker runs only when Provider Detection ran and set `PROVIDER=github` (a remote flag or `--provider github` was passed); in a plain local review `PROVIDER=none` skips it |
+| (none) | All always-run + all triggered conditional agents + CVE check if manifest files changed + static analyzers if binaries available |
 | `--quick` | pr-summarizer + code-reviewer + triggered silent-failure-hunter and pr-test-analyzer + CVE check if manifest files changed |
 | `DOCS_ONLY` (auto, no code/infra in diff) | pr-summarizer + code-reviewer + triggered silent-failure-hunter/pr-test-analyzer + CVE check; Opus agents skipped. Overridden by `--depth deep`, `--quick`, `--security-only`, `--summary-only`. Phase 5 reports auto-cheap reason. |
 | `LOW_RISK_CONFIG` (auto, config-only with no security patterns) | pr-summarizer + code-reviewer + deterministic checks; specialist Opus agents skipped. Phase 5 reports auto-cheap reason. |
-| `--no-post` / `--local` (explicit flag) | Same as default, and issue-linker stays skipped even with `--provider github`; all Phase 4 operations suppressed |
+| `--no-post` / `--local` (explicit flag) | Same as default but also skips issue-linker; all Phase 4 operations suppressed |
 | `--security-only` | security-reviewer + CVE check (if manifest files changed) |
 | `--summary-only` | pr-summarizer only |
 | `--no-cost` | Same agents as the mode it is combined with; Phase 5 prints a tools-only table (Agent, Model, Tools) with no token or USD figures |
@@ -819,7 +817,7 @@ The grep checks the aggregate diff as a boolean — if it matches anywhere, the 
   **TIER=tiny:** skip.
 - **type-design-analyzer** (subagent_type: `pr-review-toolkit:type-design-analyzer`, model: sonnet) — trigger: type definitions (`type ... struct`, `interface `, `class `, `enum `) in the diff. Pass the full diff when triggered.
   **TIER=tiny:** skip.
-- **issue-linker** (subagent_type: `comprehensive-review:issue-linker`, model: haiku) — pass commit log, branch name, manifest, repo slug, and PROVIDER value. If GOVERNANCE_BLOCK is non-empty, prepend it under `GOVERNANCE:`. Skip in `--quick` and `--pr` modes, and when `--no-post`/`--local` was **explicitly** passed. Also skipped when PROVIDER is not `github` (agent returns NONE for non-GitHub providers) — this includes `PROVIDER=none`, set by Provider Detection's local-mode skip when no remote flag and no `--provider` was passed. Pass `--provider github` to run it in a local review. When `PROVIDER=none` is the **only** reason issue-linker is skipped (none of the other skip conditions above, nor DOCS_ONLY, `--security-only` or `--summary-only`, applies), record its skip reason as exactly `local-mode-no-provider`; Phase 5 keys its `--provider github` hint on that value.
+- **issue-linker** (subagent_type: `comprehensive-review:issue-linker`, model: haiku) — pass commit log, branch name, manifest, repo slug, and PROVIDER value. If GOVERNANCE_BLOCK is non-empty, prepend it under `GOVERNANCE:`. Skip in `--quick` and `--pr` modes, and when `--no-post`/`--local` was **explicitly** passed (not the default no-post behavior). Also skipped when PROVIDER is not `github` (agent returns NONE for non-GitHub providers).
 
 Track skipped agents and reasons for Phase 5. Launch all applicable agents simultaneously.
 
@@ -1525,7 +1523,7 @@ fi
 ```
 The terminal report below cites `WORKTREE_REMOVED` and (on failure) the captured `WORKTREE_REMOVE_ERR` rather than asserting cleanup succeeded from the fact that `git worktree remove` was run.
 
-**Store review summary to claude-mem** (skip if MEM_AVAILABLE is false, or mode is `--summary-only` or `--security-only`):
+**Store review summary to claude-mem** (skip if MEM_AVAILABLE is false, `REPO_SLUG_FALLBACK=true`, or mode is `--summary-only` or `--security-only`):
 
 Compose a compact summary and POST it to the worker API. The summary text should be:
 ```
@@ -1580,7 +1578,6 @@ Note in terminal: "Review written to <path>"
    - `CREATED_PR_URL` non-empty → "${PR_TERM} created: ${CREATED_PR_URL}".
    - `--create-pr` was passed AND `CREATED_PR_URL` is empty → "${PR_TERM} creation FAILED: ${CREATED_PR_ERROR:-no URL returned by ${PROVIDER} API}".
    - No `--create-pr` and no PR/MR exists (only known when Phase 4 ran, so print this only when `REMOTE_FLAGS=true`) → "Tip: use --create-pr to create a ${PR_TERM_LONG}."
-   - issue-linker's recorded skip reason is `local-mode-no-provider` (see Phase 1) AND the `origin` URL contains `github.com` → "Note: issue-linker was skipped because provider detection is off in a local review; pass --provider github to include Related Issues & PRs."
 2. Summary post outcome (skip if Block A was folded into a draft per Phase 4 — that outcome is reported under item 3 instead):
    - `POSTED_COMMENT_REF` non-empty → "Summary comment posted to ${PR_TERM} #<N>: ${POSTED_COMMENT_REF}".
    - `--post-summary` was passed AND `POSTED_COMMENT_REF` is empty → "Summary post FAILED: ${POSTED_COMMENT_ERROR:-no identifier returned by ${PROVIDER} API}".
@@ -1645,7 +1642,7 @@ Note in terminal: "Review written to <path>"
    If MIN_CONFIDENCE > 0 → note "Confidence filter: ≥ <N> (dropped <M> findings below threshold)."
    If NOVELTY_DEMOTED_COUNT > 0 → note "Novelty pass: annotated <N> repeated low-value finding(s) from prior reviews."
 10. No findings + no failures → "No significant issues found. Ready for review."
-11. claude-mem summary stored → "Review summary stored to claude-mem." (omit if MEM_AVAILABLE is false, mode is `--summary-only` or `--security-only`, or POST failed)
+11. claude-mem summary stored → "Review summary stored to claude-mem." (omit if MEM_AVAILABLE is false, `REPO_SLUG_FALLBACK=true`, mode is `--summary-only` or `--security-only`, or POST failed)
 
 ## Notes
 

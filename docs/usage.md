@@ -35,7 +35,7 @@ By default, everything runs locally — no PR is created, no remote posting occu
 | `--read-back` | Read back your edited draft (GitHub/GitLab only), report what you kept/edited/removed, and stage any newly-noticed findings — on GitLab as additional draft notes; on GitHub, reported in the terminal only (GitHub's API can't append to an existing pending review). Requires an existing draft. Never publishes. Costs the same as a full review — it re-runs analysis to regenerate the findings it compares against. |
 | `--no-post` / `--local` | Explicit alias for the default: display everything locally, skip all remote operations |
 | `--pr <number>` | Review an existing PR/MR by number (external review mode) |
-| `--provider <name>` | Override auto-detected git provider (`github`, `gitlab`, `bitbucket`). Also forces provider detection in a local review (otherwise skipped) |
+| `--provider <name>` | Override auto-detected git provider (`github`, `gitlab`, `bitbucket`) |
 | `--no-enrich-context` | Disable symbol context enrichment (Grep-based cross-file definition lookup). Enrichment is on by default for all full runs except TIER=tiny. |
 | `--no-mem` | Disable claude-mem integration (auto-detected when available) |
 | `--no-suppress` | Disable all suppression rules (useful for debugging / audit runs) |

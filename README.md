@@ -67,7 +67,7 @@ In short: pr-review-toolkit agents handle tactical code review. This skill orche
 ¹ Bitbucket does not support inline diff comments via API. Findings are posted as a single PR comment.
 ² Issue cross-referencing is currently GitHub-only. The issue-linker agent is gracefully skipped for other providers.
 
-³ A local review needs no provider CLI. Provider detection and the `gh`/`glab` check only run when `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, or `--provider` is passed; the `jq` and Bitbucket credential checks only run with one of the first five. Without them the review runs with `PROVIDER=none` on any remote (including ones auto-detection does not recognize, such as `git.drupal.org`) and skips issue-linker; pass `--provider github` to run issue-linker in a local review.
+³ A local review (no `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, or `--read-back`) needs no provider CLI: provider detection is best effort and never stops, an unrecognized remote (such as `git.drupal.org`) runs with no provider, and the CLI and credential checks are skipped. issue-linker still runs on GitHub remotes and returns `NONE` when `gh` is missing or not authenticated.
 
 ## Installation
 
@@ -206,7 +206,7 @@ Run from any git repository, on the branch you want to review:
 | `--read-back` | Read back your edited draft (GitHub/GitLab only), report what you kept/edited/removed, and stage any newly-noticed findings — on GitLab as additional draft notes; on GitHub, reported in the terminal only (GitHub's API can't append to an existing pending review — add them yourself in the web UI). Requires an existing draft from a prior `--post-findings` run. Never publishes, never overwrites your edits. Costs the same as a full review — it re-runs analysis to regenerate the findings it compares against. |
 | `--no-post` / `--local` | Explicit alias for the default: display everything locally, skip all remote operations (this is the default — posting requires explicit flags) |
 | `--pr <number>` | Review an existing PR/MR by number (external review mode) |
-| `--provider <name>` | Override auto-detected git provider (`github`, `gitlab`, `bitbucket`). Also forces provider detection in a local review (otherwise skipped) |
+| `--provider <name>` | Override auto-detected git provider (`github`, `gitlab`, `bitbucket`) |
 | `--no-enrich-context` | Disable symbol context enrichment (Grep-based cross-file definition lookup). Context enrichment is on by default for all full runs except TIER=tiny (<50 lines, ≤3 files) — it adds ~1–3K tokens per eligible agent but reduces false positives. |
 | `--no-mem` | Disable claude-mem integration (auto-detected when available) |
 | `--no-suppress` | Disable all suppression rules (useful for debugging / audit runs where you want to see every finding) |
@@ -345,7 +345,7 @@ Opus agents (`architecture-reviewer`, `security-reviewer`) use the `opus` alias,
 | **blind-hunter** | Sonnet | Context-free "fresh eyes" review: catches issues familiarity blinds other agents to | Full run only | Raw diff only (no project context) |
 | **edge-case-hunter** | Sonnet | Mechanical path tracing: missing else/default, unguarded inputs, off-by-one, overflow, race conditions, resource leaks | Full run only | Manifest + selective reads ² |
 | **adversarial-general** | Opus | Completeness gaps, missing defenses, operational blindness, documentation debt — what specialist agents are scoped not to cover | Full run only; skipped in TIER=tiny | Manifest + selective reads ² |
-| **issue-linker** | Haiku | Finds referenced issues and related PRs/issues (GitHub only) | Full run only; skipped in `--pr` and when `--no-post`/`--local` is **explicitly** passed, on non-GitHub repos, and in a local review without `--provider github` (provider detection is skipped there) | Commit log + branch + manifest |
+| **issue-linker** | Haiku | Finds referenced issues and related PRs/issues (GitHub only) | Full run only; skipped in `--pr` and when `--no-post`/`--local` is **explicitly** passed, and on non-GitHub repos | Commit log + branch + manifest |
 
 ### Deterministic checks
 
@@ -581,7 +581,7 @@ brew install bats-core
 bats tests/*.bats
 ```
 
-Tests cover: `parse_go_mod` replace-directive ordering, TruffleHog invocation modes (including allowlist suppression), gate evaluation logic, golden orchestration contracts (SKILL.md structural integrity, PROVIDERS.md correctness, SEVERITY.md contract), all static analyzer scripts (eslint, hadolint, kube-linter, phpcs, phpstan, tflint), the model-pricing drift check, and the skill-argument-substitution regression checks. All 231 tests are offline (no network, no Claude invocation).
+Tests cover: `parse_go_mod` replace-directive ordering, TruffleHog invocation modes (including allowlist suppression), gate evaluation logic, golden orchestration contracts (SKILL.md structural integrity, PROVIDERS.md correctness, SEVERITY.md contract), all static analyzer scripts (eslint, hadolint, kube-linter, phpcs, phpstan, tflint), the model-pricing drift check, and the skill-argument-substitution regression checks. All 233 tests are offline (no network, no Claude invocation).
 
 ## Acknowledgments
 

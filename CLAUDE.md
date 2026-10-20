@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository purpose
 
-This repo distributes a Claude Code skill (`/comprehensive-review`) and seven custom agents as a Claude Code plugin. The skill supports GitHub (including Enterprise), GitLab, and Bitbucket repositories. Deliverables are markdown files distributed via the `tag1consulting` plugin marketplace. The deterministic bash helpers have a bats test suite (`tests/*.bats`, 231 tests); run with `bats tests/*.bats` (requires `bats` and `jq`).
+This repo distributes a Claude Code skill (`/comprehensive-review`) and seven custom agents as a Claude Code plugin. The skill supports GitHub (including Enterprise), GitLab, and Bitbucket repositories. Deliverables are markdown files distributed via the `tag1consulting` plugin marketplace. The deterministic bash helpers have a bats test suite (`tests/*.bats`, 233 tests); run with `bats tests/*.bats` (requires `bats` and `jq`).
 
 ## Installation
 
@@ -134,7 +134,7 @@ Each agent uses its own severity scale. The skill's `SKILL.md` defines a normali
 Agents are divided into four tiers:
 
 1. **Always-run:** pr-summarizer, code-reviewer — run in every mode including `--quick`
-2. **Full-run only (skip with `--quick`):** architecture-reviewer, security-reviewer, blind-hunter, edge-case-hunter, comment-analyzer, type-design-analyzer, issue-linker (also skipped with `--pr`, `--no-post`/`--local`, on non-GitHub repos, and when provider detection is skipped in local mode)
+2. **Full-run only (skip with `--quick`):** architecture-reviewer, security-reviewer, blind-hunter, edge-case-hunter, comment-analyzer, type-design-analyzer, issue-linker (also skipped with `--pr`, `--no-post`/`--local`, and on non-GitHub repos)
 3. **Conditional (run in both full and `--quick` when triggered by diff content):** silent-failure-hunter (error patterns), pr-test-analyzer (test files)
 4. **Deterministic (non-agent, conditional on manifest files):** `dependency-check` via `scripts/run-cve-check.sh` — runs in both full and `--quick` when `go.mod`, `package.json`, `requirements*.txt`, or `composer.json` appear in the diff
 
@@ -175,7 +175,7 @@ This allows reviewing any accessible PR/MR without being on that branch locally.
 
 The skill auto-detects the git hosting provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) from the remote URL in the Provider Detection step of Phase 0. A `--provider` flag allows manual override for self-hosted instances with non-standard hostnames.
 
-Provider Detection (including the `gh`/`glab`/Bitbucket CLI and credential checks) is skipped when none of `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back` (the Phase 4 gate flags) nor `--provider` is passed: the run uses `PROVIDER=none`, generic `PR`/`pull request` terms, a best-effort `REPO_SLUG`, and skips issue-linker. Keep the skip's flag list identical to the Phase 4 gate; `tests/orchestration_contracts.bats` enforces this.
+Without a remote flag (`--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, i.e. `REMOTE_FLAGS=false`), Provider Detection is best effort and never fatal: the self-hosted `gh`/`glab auth status` probes run only when that CLI is installed, an unrecognized remote sets `PROVIDER=none`, the CLI check in step 5 is skipped, and `REPO_SLUG` falls back to a validated `local/<dir>` or `local/repo` (claude-mem is skipped for a fallback slug). Every copy of the remote flag list must match the Phase 4 gate; `tests/orchestration_contracts.bats` enforces this.
 
 Provider-specific operations (PR metadata, checkout, create, comment, inline review) are defined in the Provider Operations Reference block in SKILL.md. Phases 0, 4, and 4b reference these operations by name rather than hardcoding provider-specific commands.
 

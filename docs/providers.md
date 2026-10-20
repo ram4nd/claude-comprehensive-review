@@ -9,7 +9,7 @@ render_with_liquid: false
 
 The skill auto-detects your git hosting provider from the remote URL. Use `--provider <name>` to override for self-hosted instances with non-standard hostnames.
 
-Detection and the `gh`/`glab` check only run when `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, or `--provider` is passed (the `jq` and Bitbucket credential checks only with one of the first five). A plain local review (the default) skips them, so it needs no `gh`/`glab`/Bitbucket credentials and works with any remote, including ones auto-detection does not recognize (e.g. `git.drupal.org`). Issue cross-referencing is skipped in that case; pass `--provider github` to enable it in a local review.
+A local review (no `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, or `--read-back`, the default) needs no `gh`/`glab`/Bitbucket credentials. Detection is best effort and never stops: the `gh auth status`/`glab auth status` probes for a self-hosted host run only when that CLI is installed, a remote that is still unrecognized (e.g. `git.drupal.org`) runs with no provider, and the CLI and credential checks are skipped. `--provider <name>` only overrides the detected provider.
 
 ## Feature matrix
 
@@ -23,13 +23,14 @@ Detection and the `gh`/`glab` check only run when `--pr`, `--create-pr`, `--post
 | `--read-back` (read your edited draft) | Yes | Yes | No ⁴ |
 | External review (`--pr <N>`) | Yes | Yes | Yes |
 | Inline review on external PR | Yes | Yes | No ¹ |
-| Issue cross-referencing (issue-linker) | Yes | No ² | No ² |
+| Issue cross-referencing (issue-linker) | Yes ⁵ | No ² | No ² |
 | `REQUEST_CHANGES` review event | Yes | N/A ³ | N/A |
 
 ¹ Bitbucket does not support inline diff comments via API. Findings are posted as a single PR comment.  
 ² Issue cross-referencing is currently GitHub-only. The issue-linker agent is gracefully skipped for other providers.  
 ³ GitLab has no single-call "submit review" API. Inline comments are posted as individual discussion threads.  
-⁴ `--post-findings` stages an editable draft by default (GitHub: pending review; GitLab: draft notes) — visible only to you until you submit it yourself; add `--publish` for the old immediate-post behavior. Bitbucket has no verified draft-create path in the public REST API, so `--post-findings` there always publishes, regardless of `--draft`/`--publish`, and `--read-back` is unavailable. `--read-back` works on both GitHub and GitLab for reporting what you kept/edited/removed, but staging newly-noticed findings into the existing draft only works on GitLab (draft notes can be appended one at a time) — on GitHub, the REST API can't append to an existing pending review, so new findings are reported in the terminal for you to add yourself.
+⁴ `--post-findings` stages an editable draft by default (GitHub: pending review; GitLab: draft notes) — visible only to you until you submit it yourself; add `--publish` for the old immediate-post behavior. Bitbucket has no verified draft-create path in the public REST API, so `--post-findings` there always publishes, regardless of `--draft`/`--publish`, and `--read-back` is unavailable. `--read-back` works on both GitHub and GitLab for reporting what you kept/edited/removed, but staging newly-noticed findings into the existing draft only works on GitLab (draft notes can be appended one at a time) — on GitHub, the REST API can't append to an existing pending review, so new findings are reported in the terminal for you to add yourself.  
+⁵ issue-linker uses `gh`. When `gh` is missing or not authenticated (possible in a local review, which does not check for it), it returns `NONE` and the Related Issues & PRs section is empty.
 
 ## GitHub / GitHub Enterprise
 
