@@ -208,7 +208,7 @@ Run from any git repository, on the branch you want to review:
 | `--no-enrich-context` | Disable symbol context enrichment (Grep-based cross-file definition lookup). Context enrichment is on by default for all full runs except TIER=tiny (<50 lines, ≤3 files) — it adds ~1–3K tokens per eligible agent but reduces false positives. |
 | `--no-mem` | Disable claude-mem integration (auto-detected when available) |
 | `--no-suppress` | Disable all suppression rules (useful for debugging / audit runs where you want to see every finding) |
-| `--no-cost` | Hide all cost estimates: omits the Phase 5 token utilization table (tokens and USD figures) and every other cost line from terminal output, `--output-file`, claude-mem, and posted content. Analysis and agent selection are unchanged. |
+| `--no-cost` | Hide the cost figures in the Phase 5 table: it keeps the Agent, Model and Tools columns and drops the Tokens and Est. Cost columns, the totals and the Sonnet tip. Analysis and agent selection are unchanged. |
 | `--min-confidence <N>` | Filter findings below this confidence threshold (0–100; default: 75; 0 disables filtering). Applied before suppression rules. |
 | `--output-file <path>` | Write Block A + Block B to a markdown file during Phase 5. Avoids re-running the review in a fresh session just to save the output. |
 
@@ -542,7 +542,7 @@ The skill uses a tiered context-passing strategy to minimize token consumption:
 - **blind-hunter cost:** Particularly cheap — it receives only the raw diff or plain file list, with no project context passed at all.
 - **Per-file diff digest:** The orchestrator pre-computes a compact per-file summary (stat line + first changed hunk, ≤20 lines per file, capped at 200 total lines) and passes it to Opus agents upfront. This allows them to prioritize which files to investigate deeply without burning tool calls on discovery, reducing the cache-read multiplier that accumulates with every tool turn.
 - **Opus agent tool-call budget:** architecture-reviewer and security-reviewer are instructed to prefer parallel batched reads and stop at 25 tool calls. Phase 5 reports actual tool-call counts with a warning if the budget is exceeded, making regressions visible.
-- **Token utilization table:** Phase 5 prints a per-agent breakdown of total tokens and estimated USD cost by default, so you can see where budget is going without running `/cost`. Pass `--no-cost` to omit it.
+- **Token utilization table:** Phase 5 prints a per-agent breakdown of total tokens and estimated USD cost by default, so you can see where budget is going without running `/cost`. Pass `--no-cost` to keep only the Agent, Model and Tools columns.
 
 ## claude-mem integration (optional)
 
@@ -580,7 +580,7 @@ brew install bats-core
 bats tests/*.bats
 ```
 
-Tests cover: `parse_go_mod` replace-directive ordering, TruffleHog invocation modes (including allowlist suppression), gate evaluation logic, golden orchestration contracts (SKILL.md structural integrity, PROVIDERS.md correctness, SEVERITY.md contract), all static analyzer scripts (eslint, hadolint, kube-linter, phpcs, phpstan, tflint), the model-pricing drift check, and the skill-argument-substitution regression checks. All 218 tests are offline (no network, no Claude invocation).
+Tests cover: `parse_go_mod` replace-directive ordering, TruffleHog invocation modes (including allowlist suppression), gate evaluation logic, golden orchestration contracts (SKILL.md structural integrity, PROVIDERS.md correctness, SEVERITY.md contract), all static analyzer scripts (eslint, hadolint, kube-linter, phpcs, phpstan, tflint), the model-pricing drift check, and the skill-argument-substitution regression checks. All 227 tests are offline (no network, no Claude invocation).
 
 ## Acknowledgments
 

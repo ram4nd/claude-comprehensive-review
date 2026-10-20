@@ -566,21 +566,23 @@ teardown() {
   grep -q '^| `--no-cost` |' "$SKILL_MD"
 }
 
-@test "SKILL.md: --no-cost skips the Phase 5 token utilization table and pricing lookup" {
+@test "SKILL.md: --no-cost prints a tools-only table and skips the pricing lookup" {
   local step7
   step7=$(grep '^7\. \*\*Display a token utilization table\*\*' "$SKILL_MD")
-  [[ "$step7" == *"unless NO_COST=true"* ]]
-  [[ "$step7" == *"If NO_COST=true, skip this entire step"* ]]
-  [[ "$step7" == *"do not read \`model-pricing.json\`"* ]]
-  # The table must no longer be described as unconditionally shown.
-  ! grep -q "always shown, even if no findings" "$SKILL_MD"
+  [[ "$step7" == *"If NO_COST=true, print a tools-only table instead"* ]]
+  [[ "$step7" == *"Omit the Tokens and Est. Cost columns"* ]]
+  [[ "$step7" == *"Do not read \`model-pricing.json\`"* ]]
+  # The table must no longer be skipped or described as unconditionally shown.
+  [[ "$step7" != *"skip this entire step"* ]]
+  # A plain negation (! grep) in the middle of a test never fails it, so use run !.
+  run ! grep -q "always shown, even if no findings" "$SKILL_MD"
   # The Opus cost tip must not be shown unconditionally.
-  ! grep -q 'Always show the "Tip: Run on Sonnet' "$SKILL_MD"
+  run ! grep -q 'Always show the "Tip: Run on Sonnet' "$SKILL_MD"
   grep -q 'Tip: Run on Sonnet.*(never when NO_COST=true)' "$SKILL_MD"
 }
 
-@test "SKILL.md: Phase 5 notes when --no-cost hid the table" {
-  grep -q 'If NO_COST=true → note "Token/cost table hidden (--no-cost)."' "$SKILL_MD"
+@test "SKILL.md: Phase 5 notes when --no-cost hid the cost columns" {
+  grep -q 'If NO_COST=true → note "Token and cost columns hidden (--no-cost)."' "$SKILL_MD"
 }
 
 @test "README.md, HELP.md, docs/usage.md: document --no-cost" {
