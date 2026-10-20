@@ -105,6 +105,14 @@ provider_detection_block() {
   fi
 }
 
+@test "SKILL.md: local-mode REPO_SLUG fallback is validated before use in bash" {
+  # Phase 5 interpolates REPO_SLUG into MEM_TITLE="..."; a raw directory
+  # name such as $(cmd) must never reach it.
+  LINE=$(provider_detection_block | grep "REPO_SLUG: best effort")
+  echo "$LINE" | grep -q 'matches `^\[a-zA-Z0-9._-\]+\$`'
+  echo "$LINE" | grep -q '`local/repo`'
+}
+
 @test "SKILL.md: issue-linker is skipped when PROVIDER=none" {
   grep "subagent_type: \`comprehensive-review:issue-linker\`" "$SKILL_MD" | grep -q "PROVIDER=none"
 }

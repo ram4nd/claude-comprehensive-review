@@ -24,7 +24,7 @@ The skill coordinates two groups of agents: custom agents owned and distributed 
 | **blind-hunter** | Sonnet | Context-free "fresh eyes" review: catches issues familiarity blinds other agents to | Full run only | Raw diff only (no project context) |
 | **edge-case-hunter** | Sonnet | Mechanical path tracing: missing else/default, unguarded inputs, off-by-one, overflow, race conditions, resource leaks | Full run only | Manifest + selective reads ¹ |
 | **adversarial-general** | Opus | Completeness gaps, missing defenses, operational blindness, documentation debt | Full run only; skipped in TIER=tiny | Manifest + selective reads ¹ |
-| **issue-linker** | Haiku | Finds referenced issues and related PRs/issues (GitHub only) | Full run only; skipped in `--pr` and on non-GitHub repos | Commit log + branch + manifest |
+| **issue-linker** | Haiku | Finds referenced issues and related PRs/issues (GitHub only) | Full run only; skipped in `--pr`, on non-GitHub repos, and in a local review without `--provider github` (provider detection is skipped there) | Commit log + branch + manifest |
 
 ¹ For small diffs (under 300 lines), the full diff is passed inline instead.  
 ² From the `pr-review-toolkit@claude-plugins-official` plugin.

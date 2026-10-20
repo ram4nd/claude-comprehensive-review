@@ -96,7 +96,8 @@ Migration note (pre-1.13.0 -> 1.13.0)
 Agents — full run
   Always:            pr-summarizer, code-reviewer
   Full-run-only:     architecture-reviewer, security-reviewer, blind-hunter, edge-case-hunter,
-                     issue-linker (GitHub only)
+                     issue-linker (GitHub only; in a local review only with
+                     --provider github)
   Conditional:       silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer
 
 Agents — --quick mode
@@ -155,9 +156,9 @@ Examples
 
 Provider support
   Detected automatically from git remote URL. Override with --provider.
-  Detection (and the gh/glab/Bitbucket credential checks) only runs when
-  --pr, --create-pr, --post-summary, --post-findings, --read-back, or
-  --provider is passed. A local review needs no provider CLI and works with
+  Detection and the gh/glab check only run when --pr, --create-pr,
+  --post-summary, --post-findings, --read-back, or --provider is passed;
+  the jq and Bitbucket credential checks only with one of the first five. A local review needs no provider CLI and works with
   any remote (e.g. git.drupal.org); issue-linker is skipped in that case.
   GitHub / GitHub Enterprise:  Full support (gh CLI required). --post-findings
                                stages a pending review by default.

@@ -56,11 +56,11 @@ Detect the git hosting provider from the remote URL. This determines which CLI t
    - PROVIDER: `none`
    - PR_TERM: "PR"
    - PR_TERM_LONG: "pull request"
-   - CLI_TOOL: empty (no provider CLI is invoked in local mode)
-   - REPO_SLUG: best effort, never fatal. Use the same `git remote get-url origin | sed ...` extraction as step 4; if there is no `origin` remote or the result does not match `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`, use `local/<basename of git rev-parse --show-toplevel>`. Only used as a label (claude-mem titles, Phase 5 summary).
+   - CLI_TOOL: empty (no provider CLI is required in local mode; the only remaining `gh` call is the optional `github-release` suppression verify in Phase 2 step 2d, which fails open when `gh` is missing)
+   - REPO_SLUG: best effort, never fatal. Use the same `git remote get-url origin | sed ...` extraction as step 4; if there is no `origin` remote or the result does not match `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`, use `local/<basename of git rev-parse --show-toplevel>` when that basename matches `^[a-zA-Z0-9._-]+$`, and the constant `local/repo` otherwise. The value must always pass the slug regex: Phase 5 interpolates it into a bash assignment (`MEM_TITLE`) and the claude-mem search query, so an unvalidated directory name could inject shell syntax.
    - PROJECT_ID: not resolved.
 
-   A purely local review needs no hosting provider: Phase 4/4b are skipped, issue-linker is skipped (PROVIDER is not `github`), and PROVIDERS.md is not read. This lets local reviews run on hosts without `gh`/`glab` and on remotes the auto-detection does not recognize (e.g. `git.drupal.org`, self-hosted Gitea). Pass `--provider <name>` to force detection and CLI validation in local mode (e.g. to enable issue-linker on GitHub).
+   A purely local review needs no hosting provider: Phase 4/4b are skipped, issue-linker is skipped (PROVIDER is not `github`), and PROVIDERS.md is not read. This lets local reviews run on hosts without `gh`/`glab` and on remotes the auto-detection does not recognize (e.g. `git.drupal.org`, self-hosted Gitea). Pass `--provider <name>` to force detection and the `gh`/`glab` check in local mode (e.g. to enable issue-linker on GitHub); the `jq` and Bitbucket credential checks in step 5 still only apply when `REMOTE_FLAGS=true`.
 
 1. Extract the remote URL: `git remote get-url origin 2>/dev/null`
 2. If `--provider <name>` was passed: if the value is not one of `github`, `gitlab`, `bitbucket`, report "Error: Unknown provider '<name>'. Valid values: github, gitlab, bitbucket." and stop. Otherwise, use that value and skip auto-detection.
@@ -655,11 +655,11 @@ Produce slices via `mktemp /tmp/cr-slice-<agent>-XXXXXXXX.txt` and `git diff <ba
 
 | Flag | Agents that run |
 |------|-----------------|
-| (none) | All always-run + all triggered conditional agents + CVE check if manifest files changed + static analyzers if binaries available |
+| (none) | All always-run + all triggered conditional agents + CVE check if manifest files changed + static analyzers if binaries available. issue-linker runs only when Provider Detection ran and set `PROVIDER=github` (a remote flag or `--provider github` was passed); in a plain local review `PROVIDER=none` skips it |
 | `--quick` | pr-summarizer + code-reviewer + triggered silent-failure-hunter and pr-test-analyzer + CVE check if manifest files changed |
 | `DOCS_ONLY` (auto, no code/infra in diff) | pr-summarizer + code-reviewer + triggered silent-failure-hunter/pr-test-analyzer + CVE check; Opus agents skipped. Overridden by `--depth deep`, `--quick`, `--security-only`, `--summary-only`. Phase 5 reports auto-cheap reason. |
 | `LOW_RISK_CONFIG` (auto, config-only with no security patterns) | pr-summarizer + code-reviewer + deterministic checks; specialist Opus agents skipped. Phase 5 reports auto-cheap reason. |
-| `--no-post` / `--local` (explicit flag) | Same as default but also skips issue-linker; all Phase 4 operations suppressed |
+| `--no-post` / `--local` (explicit flag) | Same as default, and issue-linker stays skipped even with `--provider github`; all Phase 4 operations suppressed |
 | `--security-only` | security-reviewer + CVE check (if manifest files changed) |
 | `--summary-only` | pr-summarizer only |
 | `--no-cost` | Same agents as the mode it is combined with; Phase 5 prints a tools-only table (Agent, Model, Tools) with no token or USD figures |
@@ -1061,7 +1061,7 @@ For each finding in ALL_FINDINGS, check against SUPPRESSION_RULES:
    - If rule has both `match.file` and `match.pattern`: both must match.
 2. If a rule matches and has **no** `verify` field: suppress the finding immediately.
 3. If a rule matches and has a `verify` field: call the appropriate registry API to confirm the referenced version exists. Cap total verify calls per run at 20; if the cap is reached, skip remaining verify-gated rules for this run.
-   - `github-release`: `gh api repos/{owner}/{repo}/releases/tags/{tag}` (extract owner/repo/tag from finding text)
+   - `github-release`: `gh api repos/{owner}/{repo}/releases/tags/{tag}` (extract owner/repo/tag from finding text). Independent of PROVIDER and runs in local mode too; if `gh` is not installed or not authenticated, treat it as the "any other error" case below (fail open, keep the finding).
    - `npm`: `curl -sf --max-time 5 "https://registry.npmjs.org/{pkg}/{version}"`
    - `pypi`: `curl -sf --max-time 5 "https://pypi.org/pypi/{pkg}/{version}/json"`
    - `go-module`: `curl -sf --max-time 5 "https://proxy.golang.org/{module}/@v/{version}.info"`
@@ -1293,7 +1293,7 @@ If `REDACTION_DEGRADED=true` (set in Phase 2 step 2g when `perl` was unavailable
 
 ### Phase 4: PR/MR Operations
 
-**Skip entirely unless at least one of `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, or `--read-back` was explicitly passed.** (`--no-post`/`--local` is now the default; these flags are explicit aliases for the default behavior.) `--read-back` is included here specifically so its own-branch invocation (`/comprehensive-review --read-back`, with no other posting flag) still resolves a `PR_NUMBER` — without this, Phase 4 would be skipped entirely and Phase 4b's Read-Back Pass would have no PR to read from.
+**Skip entirely unless at least one of `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, or `--read-back` was explicitly passed, i.e. unless `REMOTE_FLAGS=true` (set in Provider Detection step 0).** (`--no-post`/`--local` is now the default; these flags are explicit aliases for the default behavior.) `--read-back` is included here specifically so its own-branch invocation (`/comprehensive-review --read-back`, with no other posting flag) still resolves a `PR_NUMBER` — without this, Phase 4 would be skipped entirely and Phase 4b's Read-Back Pass would have no PR to read from.
 
 Determine PR/MR state:
 - `--pr` mode: PR_NUMBER from arg. POST_SUMMARY = `--post-summary`. POST_FINDINGS = `--post-findings` was passed (NOT auto-enabled in `--pr` mode; must be explicit).
@@ -1580,6 +1580,7 @@ Note in terminal: "Review written to <path>"
    - `CREATED_PR_URL` non-empty → "${PR_TERM} created: ${CREATED_PR_URL}".
    - `--create-pr` was passed AND `CREATED_PR_URL` is empty → "${PR_TERM} creation FAILED: ${CREATED_PR_ERROR:-no URL returned by ${PROVIDER} API}".
    - No `--create-pr` and no PR/MR exists (only known when Phase 4 ran; never print this when `PROVIDER=none`) → "Tip: use --create-pr to create a ${PR_TERM_LONG}."
+   - `PROVIDER=none` AND issue-linker would otherwise have run (full run, not `--pr`, no explicit `--no-post`/`--local`) AND the `origin` URL contains `github.com` → "Note: issue-linker was skipped because provider detection is off in a local review; pass --provider github to include Related Issues & PRs."
 2. Summary post outcome (skip if Block A was folded into a draft per Phase 4 — that outcome is reported under item 3 instead):
    - `POSTED_COMMENT_REF` non-empty → "Summary comment posted to ${PR_TERM} #<N>: ${POSTED_COMMENT_REF}".
    - `--post-summary` was passed AND `POSTED_COMMENT_REF` is empty → "Summary post FAILED: ${POSTED_COMMENT_ERROR:-no identifier returned by ${PROVIDER} API}".

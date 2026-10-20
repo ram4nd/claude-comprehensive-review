@@ -48,7 +48,7 @@ In short: pr-review-toolkit agents handle tactical code review. This skill orche
 | [glab CLI](https://gitlab.com/gitlab-org/cli) | Required for GitLab remote operations ³ |
 | `BITBUCKET_EMAIL` env var | Required for Bitbucket remote operations ³ — your Atlassian account email address |
 | `BITBUCKET_TOKEN` env var | Required for Bitbucket remote operations ³ — Atlassian API token from `id.atlassian.com` (`BITBUCKET_APP_PASSWORD` is auto-mapped if set) |
-| `jq` | Required for GitLab and Bitbucket (JSON parsing) |
+| `jq` | Required for GitLab and Bitbucket remote operations ³ (JSON parsing) |
 | `pr-review-toolkit@claude-plugins-official` | Required plugin — provides code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer |
 | `security-guidance@claude-plugins-official` | Recommended plugin — provides ambient hook-based security review on edits and commits. When installed, comprehensive-review's `security-reviewer` also reads its `claude-security-guidance.md` org-policy file to apply the same codebase-specific security rules. |
 
@@ -67,7 +67,7 @@ In short: pr-review-toolkit agents handle tactical code review. This skill orche
 ¹ Bitbucket does not support inline diff comments via API. Findings are posted as a single PR comment.
 ² Issue cross-referencing is currently GitHub-only. The issue-linker agent is gracefully skipped for other providers.
 
-³ A local review needs no provider CLI. Provider detection and its CLI/credential checks only run when `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, or `--provider` is passed. Without them the review runs with `PROVIDER=none` on any remote (including ones auto-detection does not recognize, such as `git.drupal.org`) and skips issue-linker; pass `--provider github` to run issue-linker in a local review.
+³ A local review needs no provider CLI. Provider detection and the `gh`/`glab` check only run when `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, or `--provider` is passed; the `jq` and Bitbucket credential checks only run with one of the first five. Without them the review runs with `PROVIDER=none` on any remote (including ones auto-detection does not recognize, such as `git.drupal.org`) and skips issue-linker; pass `--provider github` to run issue-linker in a local review.
 
 ## Installation
 

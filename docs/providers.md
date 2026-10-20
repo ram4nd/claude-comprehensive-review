@@ -9,7 +9,7 @@ render_with_liquid: false
 
 The skill auto-detects your git hosting provider from the remote URL. Use `--provider <name>` to override for self-hosted instances with non-standard hostnames.
 
-Detection only runs when a flag needs the provider: `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, or `--provider`. A plain local review (the default) skips it, so it needs no `gh`/`glab`/Bitbucket credentials and works with any remote, including ones auto-detection does not recognize (e.g. `git.drupal.org`). Issue cross-referencing is skipped in that case; pass `--provider github` to enable it in a local review.
+Detection and the `gh`/`glab` check only run when `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, or `--provider` is passed (the `jq` and Bitbucket credential checks only with one of the first five). A plain local review (the default) skips them, so it needs no `gh`/`glab`/Bitbucket credentials and works with any remote, including ones auto-detection does not recognize (e.g. `git.drupal.org`). Issue cross-referencing is skipped in that case; pass `--provider github` to enable it in a local review.
 
 ## Feature matrix
 
@@ -33,7 +33,7 @@ Detection only runs when a flag needs the provider: `--pr`, `--create-pr`, `--po
 
 ## GitHub / GitHub Enterprise
 
-**CLI required:** [gh CLI](https://cli.github.com/)
+**CLI required for remote operations:** [gh CLI](https://cli.github.com/)
 
 For GitHub Enterprise with a non-standard hostname, use:
 
@@ -43,13 +43,13 @@ For GitHub Enterprise with a non-standard hostname, use:
 
 ## GitLab
 
-**CLI required:** [glab CLI](https://gitlab.com/gitlab-org/cli)
+**CLI required for remote operations:** [glab CLI](https://gitlab.com/gitlab-org/cli)
 
 GitLab uses "Merge Request" (MR) terminology. All user-facing output uses "MR" when on GitLab. GitLab inline comments are posted as individual discussion threads rather than a single review event (GitLab's API does not have a review-submission model).
 
 ## Bitbucket
 
-**Environment variables required:**
+**Environment variables required for remote operations:**
 
 | Variable | Description |
 |----------|-------------|
