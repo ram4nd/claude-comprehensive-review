@@ -38,10 +38,10 @@ concurrency:
 
 jobs:
   review:
-    # `review` is a required check on main, so the job must still run (and
-    # pass) for fork PRs.  A fork PR gets no secrets on this trigger, so the
-    # review steps below run for same-repo PRs only.  A maintainer reviews
-    # a fork PR with review-dispatch after reading the diff.
+    # `review` is a required check on main.  A fork PR gets no secrets on this
+    # trigger, so the review steps below run for same-repo PRs only.  For a
+    # fork PR this job fails on purpose.  review-dispatch then posts a check
+    # run named `review` on the PR head SHA with the real review result.
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
@@ -51,15 +51,16 @@ jobs:
        github.event.label.name == 'ai-review-rescan')
     runs-on: ubuntu-latest
     steps:
-      - name: Note that fork PRs get no automatic review
+      - name: Hold the required check for fork PRs
         if: github.event.pull_request.head.repo.full_name != github.repository
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          msg="Fork PR: no automatic AI review ran because this trigger has no secrets. A maintainer must read the diff, then run: gh workflow run ai-pr-review.yml --repo ${GITHUB_REPOSITORY} -f pr_number=${PR_NUMBER} -f head_sha=${HEAD_SHA}"
-          echo "::notice title=No AI review for fork PR::${msg}"
+          msg="Fork PR: no automatic AI review ran because this trigger has no secrets. This check stays failed until a maintainer reads the diff and runs: gh workflow run ai-pr-review.yml --repo ${GITHUB_REPOSITORY} -f pr_number=${PR_NUMBER} -f head_sha=${HEAD_SHA}"
+          echo "::error title=No AI review for fork PR::${msg}"
           echo "${msg}" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - uses: actions/checkout@v7
         if: github.event.pull_request.head.repo.full_name == github.repository
@@ -122,6 +123,11 @@ jobs:
       github.event_name == 'workflow_dispatch' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
+    # No checks: write here.  This job hands its token to a container that
+    # reads fork content, so the check run is posted by post-review-check.
+    outputs:
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      review_outcome: ${{ steps.review.outcome }}
     steps:
       - name: Resolve pull request
         id: pr
@@ -177,6 +183,7 @@ jobs:
           fi
 
       - name: Run AI review
+        id: review
         uses: tag1consulting/ai-pr-review/container-action@main
         env:
           FORCE_FULL_DIFF: 'false'
@@ -198,6 +205,40 @@ jobs:
           context-enrichment: ${{ vars.AI_REVIEW_CONTEXT_ENRICHMENT || 'false' }}
           feedback-loop: ${{ vars.AI_REVIEW_FEEDBACK_LOOP || 'false' }}
           fail-on-findings: ${{ vars.AI_REVIEW_FAIL_ON_FINDINGS || 'false' }}
+
+  # Posts the dispatched review result as a check run named `review` on the PR
+  # head SHA, so the required `review` check reflects it.  It checks out no
+  # code and holds only checks: write.  The run is created with GITHUB_TOKEN,
+  # so it belongs to the GitHub Actions app.
+  post-review-check:
+    needs: review-dispatch
+    if: always() && needs.review-dispatch.outputs.head_sha != ''
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    steps:
+      - name: Post review result as a check on the PR head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ needs.review-dispatch.outputs.head_sha }}
+          REVIEW_OUTCOME: ${{ needs.review-dispatch.outputs.review_outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "$REVIEW_OUTCOME" == "success" ]]; then
+            conclusion=success
+            summary="A maintainer-dispatched AI review of ${HEAD_SHA} completed. See the run for details."
+          else
+            conclusion=failure
+            summary="A maintainer-dispatched AI review of ${HEAD_SHA} did not succeed (step outcome: ${REVIEW_OUTCOME:-skipped}). See the run for details."
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name=review \
+            -f head_sha="$HEAD_SHA" \
+            -f status=completed \
+            -f conclusion="$conclusion" \
+            -f details_url="$RUN_URL" \
+            -f 'output[title]=Maintainer-dispatched AI review' \
+            -f "output[summary]=${summary}"
 
   cleanup-rescan-label:
     needs: review

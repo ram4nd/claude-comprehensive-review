@@ -11,6 +11,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - **A maintainer can start an AI review of a fork PR** (#159). The `AI PR Review` workflow has a new `workflow_dispatch` trigger with the inputs `pr_number`, `head_sha` and `review_mode`. The new `review-dispatch` job runs only when it is dispatched from the default branch, so a fork cannot change the workflow or the action. It checks that `pr_number` is digits and `head_sha` is 40 lowercase hex characters, and that the PR is open. It fails if the PR head differs from `head_sha` or if the checked-out `HEAD` differs from it. Run it with `gh workflow run ai-pr-review.yml --repo <owner>/<repo> -f pr_number=<N> -f head_sha=<sha you reviewed>`. The job reads fork content while secrets are present, so read the diff first.
 
+### Changed
+
+- **A fork PR no longer passes the required `review` check without a review.** The `review` job now fails on a fork PR on purpose, with a message that names the dispatch command, so a fork PR cannot merge unreviewed by accident. The `review-dispatch` job now posts a check run named `review` on the PR head commit. Its conclusion follows the dispatched review: `success` when the review step succeeded and `failure` otherwise. A separate job, `post-review-check`, has `checks: write` and checks out no code, so the token in the job that reads fork content cannot create check runs. This replaces the behavior in #159, where a fork PR passed `review` with a notice. Not yet confirmed: that GitHub uses the newest of two `review` check runs on one commit for the required check.
+
 ### Fixed
 
 - **The required `review` check failed on every fork PR** (#159). A fork PR gets no secrets on the `pull_request` trigger, so the job stopped with `ANTHROPIC_API_KEY is required`. The `review` job now passes on a fork PR. It skips the review steps and prints a notice with the dispatch command. A fork PR can therefore merge with no AI review, so a maintainer decides whether to start one.
