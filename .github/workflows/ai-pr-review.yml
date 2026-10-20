@@ -3,6 +3,23 @@ name: AI PR Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, labeled]
+  # Maintainer-gated review of a fork PR.  The automatic pull_request trigger
+  # cannot see secrets on fork PRs, so the `review` job skips them and a
+  # maintainer runs this instead, after reading the diff:
+  #   gh workflow run ai-pr-review.yml -f pr_number=<N> [-f review_mode=full]
+  # Only users with write access can dispatch a workflow.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number to review (read the diff first: fork content is untrusted)"
+        required: true
+        type: string
+      review_mode:
+        description: Review mode
+        required: false
+        default: quick
+        type: choice
+        options: [quick, full]
 
 permissions:
   contents: read
@@ -10,12 +27,17 @@ permissions:
   issues: write
 
 concurrency:
-  group: ai-pr-review-${{ github.event.pull_request.number }}
+  group: ai-pr-review-${{ github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
   review:
+    # `review` is a required check on main, so the job must still run (and
+    # pass) for fork PRs.  A fork PR gets no secrets on this trigger, so the
+    # review steps below run for same-repo PRs only.  A maintainer reviews
+    # a fork PR with review-dispatch after reading the diff.
     if: >-
+      github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
       !contains(github.event.pull_request.labels.*.name, 'skip-ai-review') &&
       (github.event.action != 'labeled' ||
@@ -23,11 +45,22 @@ jobs:
        github.event.label.name == 'ai-review-rescan')
     runs-on: ubuntu-latest
     steps:
+      - name: Note that fork PRs get no automatic review
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          msg="Fork PR: no automatic AI review ran because this trigger has no secrets. A maintainer must read the diff, then run: gh workflow run ai-pr-review.yml -f pr_number=${PR_NUMBER}"
+          echo "::notice title=No AI review for fork PR::${msg}"
+          echo "${msg}" >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v7
+        if: github.event.pull_request.head.repo.full_name == github.repository
         with:
           fetch-depth: 0
 
       - name: Run AI review
+        if: github.event.pull_request.head.repo.full_name == github.repository
         uses: tag1consulting/ai-pr-review/container-action@main
         env:
           # ai-review-rescan label forces a full-diff re-review by setting
@@ -70,10 +103,88 @@ jobs:
           # outcome is REQUEST_CHANGES or COMMENT, blocking automerge.
           fail-on-findings: ${{ vars.AI_REVIEW_FAIL_ON_FINDINGS || 'false' }}
 
+  # Maintainer-triggered review, used for fork PRs.  Security model:
+  #   - workflow_dispatch needs write access, and runs the workflow file from
+  #     the default branch, so a fork cannot change this file or the action.
+  #   - Fork content is checked out with secrets present in the job, so the
+  #     maintainer must read the diff first (prompt injection is still possible).
+  #   - persist-credentials is false, so the checkout leaves no token in .git.
+  review-dispatch:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::pr_number must be digits only"
+            exit 1
+          fi
+          # --repo pins the lookup to this repository.
+          gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json state,isDraft,baseRefName,headRefOid > pr.json
+          state=$(jq -r .state pr.json)
+          if [[ "$state" != "OPEN" ]]; then
+            echo "::error::PR #$PR_NUMBER is $state, not OPEN"
+            exit 1
+          fi
+          {
+            echo "number=$PR_NUMBER"
+            echo "base_ref=$(jq -r .baseRefName pr.json)"
+            echo "head_sha=$(jq -r .headRefOid pr.json)"
+          } >> "$GITHUB_OUTPUT"
+          rm pr.json
+
+      - uses: actions/checkout@v7
+        with:
+          # refs/pull/N/head exists in the base repo for fork PRs too.
+          ref: refs/pull/${{ steps.pr.outputs.number }}/head
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify checkout matches the resolved head
+        env:
+          EXPECTED_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          actual=$(git rev-parse HEAD)
+          if [[ "$actual" != "$EXPECTED_SHA" ]]; then
+            echo "::error::PR head moved during checkout ($actual != $EXPECTED_SHA). Re-run after reading the new diff."
+            exit 1
+          fi
+
+      - name: Run AI review
+        uses: tag1consulting/ai-pr-review/container-action@main
+        env:
+          FORCE_FULL_DIFF: 'false'
+        with:
+          image-tag: ${{ vars.AI_REVIEW_IMAGE_TAG || 'latest' }}
+          registry-token: ${{ secrets.GHCR_TOKEN }}
+          provider: ${{ vars.AI_REVIEW_PROVIDER || 'anthropic' }}
+          api-key: ${{ secrets.AI_REVIEW_API_KEY }}
+          base-url: ${{ vars.AI_REVIEW_BASE_URL || '' }}
+          model-standard: ${{ vars.AI_REVIEW_MODEL_STANDARD || '' }}
+          model-premium: ${{ vars.AI_REVIEW_MODEL_PREMIUM || '' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ steps.pr.outputs.number }}
+          base-ref: ${{ steps.pr.outputs.base_ref }}
+          head-sha: ${{ steps.pr.outputs.head_sha }}
+          review-mode: ${{ inputs.review_mode }}
+          engine: ${{ vars.AI_PR_REVIEW_ENGINE || 'bash' }}
+          ignore-merge-commits: ${{ vars.AI_REVIEW_IGNORE_MERGE_COMMITS || 'false' }}
+          context-enrichment: ${{ vars.AI_REVIEW_CONTEXT_ENRICHMENT || 'false' }}
+          feedback-loop: ${{ vars.AI_REVIEW_FEEDBACK_LOOP || 'false' }}
+          fail-on-findings: ${{ vars.AI_REVIEW_FAIL_ON_FINDINGS || 'false' }}
+
   cleanup-rescan-label:
     needs: review
     if: >-
       always() &&
+      github.event_name == 'pull_request' &&
       !contains(github.event.pull_request.labels.*.name, 'skip-ai-review')
     runs-on: ubuntu-latest
     permissions:
