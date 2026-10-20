@@ -94,7 +94,7 @@ Note: GitHub inline review posting uses `gh api` (see OP: Post inline review in 
    - Note mode flags: `--quick`, `--security-only`, `--summary-only`, `--create-pr`,
      `--no-post`/`--local`, `--post-summary`, `--post-findings`, `--no-findings`, `--publish`, `--draft`, `--read-back`, `--no-enrich-context`, `--no-mem`, `--no-suppress`, `--no-cost`
    - Extract `--output-file <path>` if present — set OUTPUT_FILE to the given path for Phase 5 file write
-   - If `--no-cost` is present, set NO_COST=true (default NO_COST=false). NO_COST suppresses all money and cost estimation for the run: do not read `model-pricing.json`, do not compute blended-rate estimates, and omit the Phase 5 token utilization table entirely (token counts included). No USD figure, cost estimate, or cost tip may appear in terminal output, the `--output-file` file, the claude-mem summary, or anything posted to the provider. `--no-cost` changes only what is displayed: agent selection, models, and analysis are unaffected. It composes with every other flag.
+   - If `--no-cost` is present, set NO_COST=true (default NO_COST=false). NO_COST suppresses all money and cost estimation for the run: do not read `model-pricing.json`, do not compute blended-rate estimates, and omit the Phase 5 token utilization table entirely (token counts included). No USD figure, cost estimate, or cost tip may appear in terminal output, the `--output-file` file, the claude-mem summary, or anything posted to the provider. `--no-cost` changes only what is displayed: agent selection, models, and analysis are unaffected. It composes with every other flag. The `--read-back` notice below still prints under `--no-cost`: it states no figure and warns before an expensive run starts.
    - Extract `--depth <normal|deep>` if present; default DEPTH=`normal`. If value is not one of `{normal, deep}`, report "Error: Invalid --depth value '<value>'. Valid values are: normal, deep." and stop.
    - Extract `--min-confidence <N>` if present; default MIN_CONFIDENCE=75. Validate: value must be an integer in [0,100]. If invalid, report "Error: Invalid --min-confidence value '<value>'. Must be an integer 0–100." and stop. A value of 0 disables confidence filtering.
    - **Determine POST_MODE** (governs `--post-findings` only — irrelevant unless `--post-findings` is present, including in `--pr`-mode posting; `--post-summary` used alone always posts a plain comment and ignores POST_MODE, see Phase 4's "Post summary comment" scope note): `POST_MODE=draft` unless `--publish` is present, in which case `POST_MODE=publish`. `--draft` is accepted as an explicit no-op alias of the default, for symmetry with `--publish` and for scripts that want to pin the behavior against a future default change.
@@ -1623,13 +1623,14 @@ Note in terminal: "Review written to <path>"
    - The `Tokens` column comes from the `subagent_tokens` value in each agent's `<usage>` block in the tool result. Read it directly. Show `—` only if an agent crashed before returning usage data.
    - Cost = `(subagent_tokens / 1_000_000) × blended_rate`. Blended rates approximate the mix of input, output, and cache tokens in a typical agent run, applied to the final-turn context size.
    - Populate the "orchestrator (est.)" row only if you can derive approximate figures from the session; otherwise show `— see /cost`.
-   - Always show the "Tip: Run on Sonnet..." line if the orchestrator model is Opus.
+   - Show the "Tip: Run on Sonnet..." line whenever the table is shown and the orchestrator model is Opus (never when NO_COST=true).
    - Omit skipped agents from the table.
    - Flag `⚠ tools>25` on any agent whose Tools count exceeds 25.
 8. Critical/High findings → "⚠ Address Critical/High findings before requesting review."
 9. Agent failures → "⚠ Review incomplete — <N> agent(s) failed."
    If CVE_CHECK_FAILED=true → "⚠ CVE check did not run (script not found or execution failed) — dependency vulnerabilities not scanned." Show this even when CVE_JSON is [] so the user knows the empty result means 'check skipped', not 'no vulnerabilities'.
    If `--no-suppress` was passed → note "Suppression rules disabled (--no-suppress)." in terminal output.
+   If NO_COST=true → note "Token/cost table hidden (--no-cost)." in terminal output.
    If MIN_CONFIDENCE > 0 → note "Confidence filter: ≥ <N> (dropped <M> findings below threshold)."
    If NOVELTY_DEMOTED_COUNT > 0 → note "Novelty pass: annotated <N> repeated low-value finding(s) from prior reviews."
 10. No findings + no failures → "No significant issues found. Ready for review."
