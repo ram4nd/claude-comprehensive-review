@@ -13,7 +13,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
-- **A fork PR no longer passes the required `review` check without a review.** The `review` job now fails on a fork PR on purpose, with a message that names the dispatch command, so a fork PR cannot merge unreviewed by accident. The `review-dispatch` job now posts a check run named `review` on the PR head commit. Its conclusion follows the dispatched review: `success` when the review step succeeded and `failure` otherwise. The job has `checks: write` for this. This replaces the behavior in #159, where a fork PR passed `review` with a notice. Not yet confirmed: that GitHub uses the newest of two `review` check runs on one commit for the required check.
+- **A fork PR no longer passes the required `review` check without a review.** The `review` job now fails on a fork PR on purpose, with a message that names the dispatch command, so a fork PR cannot merge unreviewed by accident. The `review-dispatch` job now posts a check run named `review` on the PR head commit. Its conclusion follows the dispatched review: `success` when the review step succeeded and `failure` otherwise. A separate job, `post-review-check`, has `checks: write` and checks out no code, so the token in the job that reads fork content cannot create check runs. This replaces the behavior in #159, where a fork PR passed `review` with a notice. Not yet confirmed: that GitHub uses the newest of two `review` check runs on one commit for the required check.
 
 ### Fixed
 
