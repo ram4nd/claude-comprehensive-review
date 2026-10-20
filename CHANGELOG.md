@@ -9,7 +9,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
-- **A maintainer can start an AI review of a fork PR** (#159). The `AI PR Review` workflow has a new `workflow_dispatch` trigger with the inputs `pr_number`, `head_sha` and `review_mode`. The new `review-dispatch` job runs only when it is dispatched from the default branch, so a fork cannot change the workflow or the action. It checks that `pr_number` is digits and `head_sha` is 40 lowercase hex characters, and that the PR is open. It fails if the PR head differs from `head_sha` or if the checked-out `HEAD` differs from it. Run it with `gh workflow run ai-pr-review.yml -f pr_number=<N> -f head_sha=<sha you reviewed>`. The job reads fork content while secrets are present, so read the diff first.
+- **A maintainer can start an AI review of a fork PR** (#159). The `AI PR Review` workflow has a new `workflow_dispatch` trigger with the inputs `pr_number`, `head_sha` and `review_mode`. The new `review-dispatch` job runs only when it is dispatched from the default branch, so a fork cannot change the workflow or the action. It checks that `pr_number` is digits and `head_sha` is 40 lowercase hex characters, and that the PR is open. It fails if the PR head differs from `head_sha` or if the checked-out `HEAD` differs from it. Run it with `gh workflow run ai-pr-review.yml --repo <owner>/<repo> -f pr_number=<N> -f head_sha=<sha you reviewed>`. The job reads fork content while secrets are present, so read the diff first.
 
 ### Fixed
 
