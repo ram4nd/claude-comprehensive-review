@@ -113,6 +113,22 @@ provider_detection_block() {
   echo "$LINE" | grep -q '`local/repo`'
 }
 
+@test "SKILL.md: jq and Bitbucket credential checks are gated on REMOTE_FLAGS" {
+  BLOCK=$(provider_detection_block)
+  echo "$BLOCK" | grep "jq --version" | grep -q 'unless `REMOTE_FLAGS=false`'
+  echo "$BLOCK" | grep "BITBUCKET_TOKEN" | grep -q 'unless `REMOTE_FLAGS=false`'
+  if echo "$BLOCK" | grep -q 'unless `--no-post`/`--local` was passed'; then
+    echo "REGRESSION: step 5 gated on the explicit --local flag instead of REMOTE_FLAGS" >&2
+    return 1
+  fi
+}
+
+@test "SKILL.md: Phase 5 create-pr tip and issue-linker hint are guarded" {
+  grep "Tip: use --create-pr" "$SKILL_MD" | grep -q 'only when `REMOTE_FLAGS=true`'
+  grep -q 'record its skip reason as exactly `local-mode-no-provider`' "$SKILL_MD"
+  grep "pass --provider github to include Related Issues" "$SKILL_MD" | grep -q '`local-mode-no-provider`'
+}
+
 @test "SKILL.md: issue-linker is skipped when PROVIDER=none" {
   grep "subagent_type: \`comprehensive-review:issue-linker\`" "$SKILL_MD" | grep -q "PROVIDER=none"
 }

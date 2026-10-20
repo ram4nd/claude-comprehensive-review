@@ -158,8 +158,9 @@ Provider support
   Detected automatically from git remote URL. Override with --provider.
   Detection and the gh/glab check only run when --pr, --create-pr,
   --post-summary, --post-findings, --read-back, or --provider is passed;
-  the jq and Bitbucket credential checks only with one of the first five. A local review needs no provider CLI and works with
-  any remote (e.g. git.drupal.org); issue-linker is skipped in that case.
+  the jq and Bitbucket credential checks only with one of the first five.
+  A local review needs no provider CLI and works with any remote (e.g.
+  git.drupal.org); issue-linker is skipped in that case.
   GitHub / GitHub Enterprise:  Full support (gh CLI required). --post-findings
                                stages a pending review by default.
   GitLab:                      Full support (glab CLI required). --post-findings

@@ -819,7 +819,7 @@ The grep checks the aggregate diff as a boolean — if it matches anywhere, the 
   **TIER=tiny:** skip.
 - **type-design-analyzer** (subagent_type: `pr-review-toolkit:type-design-analyzer`, model: sonnet) — trigger: type definitions (`type ... struct`, `interface `, `class `, `enum `) in the diff. Pass the full diff when triggered.
   **TIER=tiny:** skip.
-- **issue-linker** (subagent_type: `comprehensive-review:issue-linker`, model: haiku) — pass commit log, branch name, manifest, repo slug, and PROVIDER value. If GOVERNANCE_BLOCK is non-empty, prepend it under `GOVERNANCE:`. Skip in `--quick` and `--pr` modes, and when `--no-post`/`--local` was **explicitly** passed. Also skipped when PROVIDER is not `github` (agent returns NONE for non-GitHub providers) — this includes `PROVIDER=none`, set by Provider Detection's local-mode skip when no remote flag and no `--provider` was passed. Pass `--provider github` to run it in a local review.
+- **issue-linker** (subagent_type: `comprehensive-review:issue-linker`, model: haiku) — pass commit log, branch name, manifest, repo slug, and PROVIDER value. If GOVERNANCE_BLOCK is non-empty, prepend it under `GOVERNANCE:`. Skip in `--quick` and `--pr` modes, and when `--no-post`/`--local` was **explicitly** passed. Also skipped when PROVIDER is not `github` (agent returns NONE for non-GitHub providers) — this includes `PROVIDER=none`, set by Provider Detection's local-mode skip when no remote flag and no `--provider` was passed. Pass `--provider github` to run it in a local review. When `PROVIDER=none` is the **only** reason issue-linker is skipped (none of the other skip conditions above, nor DOCS_ONLY, `--security-only` or `--summary-only`, applies), record its skip reason as exactly `local-mode-no-provider`; Phase 5 keys its `--provider github` hint on that value.
 
 Track skipped agents and reasons for Phase 5. Launch all applicable agents simultaneously.
 
@@ -1579,8 +1579,8 @@ Note in terminal: "Review written to <path>"
 1. PR/MR creation outcome:
    - `CREATED_PR_URL` non-empty → "${PR_TERM} created: ${CREATED_PR_URL}".
    - `--create-pr` was passed AND `CREATED_PR_URL` is empty → "${PR_TERM} creation FAILED: ${CREATED_PR_ERROR:-no URL returned by ${PROVIDER} API}".
-   - No `--create-pr` and no PR/MR exists (only known when Phase 4 ran; never print this when `PROVIDER=none`) → "Tip: use --create-pr to create a ${PR_TERM_LONG}."
-   - `PROVIDER=none` AND issue-linker would otherwise have run (full run, not `--pr`, no explicit `--no-post`/`--local`) AND the `origin` URL contains `github.com` → "Note: issue-linker was skipped because provider detection is off in a local review; pass --provider github to include Related Issues & PRs."
+   - No `--create-pr` and no PR/MR exists (only known when Phase 4 ran, so print this only when `REMOTE_FLAGS=true`) → "Tip: use --create-pr to create a ${PR_TERM_LONG}."
+   - issue-linker's recorded skip reason is `local-mode-no-provider` (see Phase 1) AND the `origin` URL contains `github.com` → "Note: issue-linker was skipped because provider detection is off in a local review; pass --provider github to include Related Issues & PRs."
 2. Summary post outcome (skip if Block A was folded into a draft per Phase 4 — that outcome is reported under item 3 instead):
    - `POSTED_COMMENT_REF` non-empty → "Summary comment posted to ${PR_TERM} #<N>: ${POSTED_COMMENT_REF}".
    - `--post-summary` was passed AND `POSTED_COMMENT_REF` is empty → "Summary post FAILED: ${POSTED_COMMENT_ERROR:-no identifier returned by ${PROVIDER} API}".
