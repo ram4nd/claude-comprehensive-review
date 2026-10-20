@@ -50,7 +50,7 @@ Run this skill on **Sonnet** — the orchestrator does structured workflow coord
 
 ## Token utilization table
 
-Phase 5 always prints a per-agent breakdown of tokens, tool calls, and estimated USD cost, so you can see where budget is going without running `/cost`:
+Phase 5 prints a per-agent breakdown of tokens, tool calls, and estimated USD cost by default, so you can see where budget is going without running `/cost`. Pass `--no-cost` to omit the table and every other cost figure from the output:
 
 | Column | Description |
 |--------|-------------|

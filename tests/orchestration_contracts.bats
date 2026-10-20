@@ -559,6 +559,29 @@ teardown() {
   grep -q "\-\-draft" "$HELP_MD"
 }
 
+@test "SKILL.md: --no-cost is parsed in Phase 0 and listed in argument-hint" {
+  grep -q '^argument-hint:.*\[--no-cost\]' "$SKILL_MD"
+  grep -q '`--no-mem`, `--no-suppress`, `--no-cost`' "$SKILL_MD"
+  grep -q "set NO_COST=true" "$SKILL_MD"
+  grep -q '^| `--no-cost` |' "$SKILL_MD"
+}
+
+@test "SKILL.md: --no-cost skips the Phase 5 token utilization table and pricing lookup" {
+  local step7
+  step7=$(grep '^7\. \*\*Display a token utilization table\*\*' "$SKILL_MD")
+  [[ "$step7" == *"unless NO_COST=true"* ]]
+  [[ "$step7" == *"If NO_COST=true, skip this entire step"* ]]
+  [[ "$step7" == *"do not read \`model-pricing.json\`"* ]]
+  # The table must no longer be described as unconditionally shown.
+  ! grep -q "always shown, even if no findings" "$SKILL_MD"
+}
+
+@test "README.md, HELP.md, docs/usage.md: document --no-cost" {
+  grep -q '^| `--no-cost` |' "$README_MD"
+  grep -q '^  --no-cost ' "$HELP_MD"
+  grep -q '^| `--no-cost` |' "${SCRIPTS_DIR}/../../../docs/usage.md"
+}
+
 # ---------------------------------------------------------------------------
 # Gate decisions for synthetic fixture diffs
 # ---------------------------------------------------------------------------

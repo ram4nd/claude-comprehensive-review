@@ -67,6 +67,10 @@ Flags
                      calls on large repos become slow.
   --no-mem           Disable claude-mem integration (auto-detected when available)
   --no-suppress      Disable all suppression rules (shows every finding; useful for audits)
+  --no-cost          Hide all cost estimates: omits the Phase 5 token utilization
+                     table (tokens and USD figures) and every other cost line from
+                     the terminal, --output-file, claude-mem, and posted content.
+                     Analysis and agent selection are unchanged.
   --min-confidence N Filter findings below confidence N (0–100; default 75; 0 disables). Applied
                      before suppression rules. See SEVERITY.md for the confidence scale.
   --output-file <p>  Write Block A + Block B to a markdown file at path <p> during Phase 5.
@@ -138,6 +142,7 @@ Examples
   /comprehensive-review                         Review current branch, everything local
   /comprehensive-review --create-pr             Review and create PR with summary
   /comprehensive-review --quick                 Fast review, skip expensive agents
+  /comprehensive-review --no-cost               Review without the token/cost table
   /comprehensive-review --post-findings         Stage findings as your draft review (own PR)
   /comprehensive-review --post-findings --publish  Post findings immediately (own PR)
   /comprehensive-review --read-back             Read back your edited draft, flag what you missed
