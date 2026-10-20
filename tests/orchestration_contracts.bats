@@ -124,6 +124,8 @@ phase4_flags() {
   check HELP.md "$(grep -A2 'A local review needs no provider CLI. Without' "$HELP_MD" | remote_flags_of)"
   check CLAUDE.md "$(grep '^Without a remote flag' "$CLAUDE_MD" | remote_flags_of)"
   check docs/providers.md "$(grep '^A local review (no' "$DOCS_DIR/providers.md" | remote_flags_of)"
+  # The entry also names `gh --version`, so start at the flag list itself.
+  check CHANGELOG.md "$(grep '^- \*\*A local review no longer stops' "${SCRIPTS_DIR}/../../../CHANGELOG.md" | sed 's/.*runs only when //' | remote_flags_of)"
 }
 
 @test "SKILL.md: CLI validation no longer claims to always run" {
