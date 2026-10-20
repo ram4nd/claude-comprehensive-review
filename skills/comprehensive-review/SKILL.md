@@ -52,6 +52,16 @@ The orchestrator is a software-engineering actor: it spawns subagents, calls pro
 
 Detect the git hosting provider from the remote URL. This determines which CLI tool and API to use for all PR/MR operations.
 
+0. **Local-mode skip.** Set `REMOTE_FLAGS=true` if at least one of `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, or `--read-back` was passed (the same flag set that gates Phase 4); otherwise `REMOTE_FLAGS=false`. If `REMOTE_FLAGS=false` AND `--provider` was not passed, skip the rest of Provider Detection (steps 1–5, including CLI validation) and set:
+   - PROVIDER: `none`
+   - PR_TERM: "PR"
+   - PR_TERM_LONG: "pull request"
+   - CLI_TOOL: empty (no provider CLI is invoked in local mode)
+   - REPO_SLUG: best effort, never fatal. Use the same `git remote get-url origin | sed ...` extraction as step 4; if there is no `origin` remote or the result does not match `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`, use `local/<basename of git rev-parse --show-toplevel>`. Only used as a label (claude-mem titles, Phase 5 summary).
+   - PROJECT_ID: not resolved.
+
+   A purely local review needs no hosting provider: Phase 4/4b are skipped, issue-linker is skipped (PROVIDER is not `github`), and PROVIDERS.md is not read. This lets local reviews run on hosts without `gh`/`glab` and on remotes the auto-detection does not recognize (e.g. `git.drupal.org`, self-hosted Gitea). Pass `--provider <name>` to force detection and CLI validation in local mode (e.g. to enable issue-linker on GitHub).
+
 1. Extract the remote URL: `git remote get-url origin 2>/dev/null`
 2. If `--provider <name>` was passed: if the value is not one of `github`, `gitlab`, `bitbucket`, report "Error: Unknown provider '<name>'. Valid values: github, gitlab, bitbucket." and stop. Otherwise, use that value and skip auto-detection.
 3. Otherwise, auto-detect:
@@ -69,19 +79,19 @@ Detect the git hosting provider from the remote URL. This determines which CLI t
    - PR_TERM_LONG: "pull request" (github, bitbucket) or "merge request" (gitlab)
    - CLI_TOOL: "gh" (github) or "glab" (gitlab) or "curl" (bitbucket)
    - REPO_SLUG: extract from remote URL via `git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^:/]*\/[^:/]*\)\.git$|\1|; s|.*[:/]\([^:/]*\/[^:/]*\)$|\1|'`. Validate it matches `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`; if not, report "Error: Could not extract valid repository slug from remote URL." and stop. Used by Bitbucket API URLs.
-   - PROJECT_ID (gitlab only, **deferred**): not resolved here. Resolved in Phase 4b when inline comments are actually needed. Skip if `--no-post`/`--local` is set or PROVIDER is not gitlab.
+   - PROJECT_ID (gitlab only, **deferred**): not resolved here. Resolved in Phase 4b when inline comments are actually needed. Skip if `REMOTE_FLAGS=false` or PROVIDER is not gitlab.
 
-5. Validate CLI tool availability (always runs, regardless of whether provider was auto-detected or manually specified via `--provider`):
+5. Validate CLI tool availability (runs whenever steps 1–4 ran, regardless of whether provider was auto-detected or manually specified via `--provider`):
    - GitHub: `gh --version` must succeed. If not: "Error: gh CLI is required for GitHub repositories. Install: https://cli.github.com/"
    - GitLab: `glab --version` must succeed. If not: "Error: glab CLI is required for GitLab repositories. Install: https://gitlab.com/gitlab-org/cli"
-   - GitLab/Bitbucket: `jq --version` must succeed **unless `--no-post`/`--local` was passed** (no JSON parsing needed in local mode). If not: "Error: jq is required for GitLab/Bitbucket repositories. Install: https://jqlang.org/"
-   - Bitbucket: `curl --version` must succeed (should always be available). Also verify both `BITBUCKET_EMAIL` and `BITBUCKET_TOKEN` env vars are set **unless `--no-post`/`--local` was passed** (no API calls needed in local mode). If `BITBUCKET_APP_PASSWORD` is set but `BITBUCKET_TOKEN` is not, set `BITBUCKET_TOKEN=$BITBUCKET_APP_PASSWORD`. If `BITBUCKET_TOKEN` is not set and `--no-post`/`--local` was NOT passed: "Error: BITBUCKET_TOKEN environment variable is required for Bitbucket repositories. Set BITBUCKET_TOKEN to your Atlassian API token." If `BITBUCKET_EMAIL` is not set and `--no-post`/`--local` was NOT passed: "Error: BITBUCKET_EMAIL environment variable is required for Bitbucket repositories. Set BITBUCKET_EMAIL to your Atlassian account email address."
+   - GitLab/Bitbucket: `jq --version` must succeed **unless `REMOTE_FLAGS=false`** (no JSON parsing needed in local mode). If not: "Error: jq is required for GitLab/Bitbucket repositories. Install: https://jqlang.org/"
+   - Bitbucket: `curl --version` must succeed (should always be available). Also verify both `BITBUCKET_EMAIL` and `BITBUCKET_TOKEN` env vars are set **unless `REMOTE_FLAGS=false`** (no API calls needed in local mode). If `BITBUCKET_APP_PASSWORD` is set but `BITBUCKET_TOKEN` is not, set `BITBUCKET_TOKEN=$BITBUCKET_APP_PASSWORD`. If `BITBUCKET_TOKEN` is not set and `REMOTE_FLAGS=true`: "Error: BITBUCKET_TOKEN environment variable is required for Bitbucket repositories. Set BITBUCKET_TOKEN to your Atlassian API token." If `BITBUCKET_EMAIL` is not set and `REMOTE_FLAGS=true`: "Error: BITBUCKET_EMAIL environment variable is required for Bitbucket repositories. Set BITBUCKET_EMAIL to your Atlassian account email address."
 
 Note: GitHub inline review posting uses `gh api` (see OP: Post inline review in PROVIDERS.md). No `mcp__github-pat__*` tools are used. For GitLab and Bitbucket, all operations use CLI tools (glab, curl) via Bash.
 
 ### Provider Operations Reference
 
-> **Skip reading PROVIDERS.md** if `--no-post` or `--local` was passed — no provider operations will fire in that mode.
+> **Skip reading PROVIDERS.md** if `REMOTE_FLAGS=false` (local mode, the default — including an explicit `--no-post`/`--local`) — no provider operations will fire in that mode.
 >
 > When a provider operation is needed in Phase 0 (external PR checkout), Phase 4, or Phase 4b, read the full command reference from `skills/comprehensive-review/PROVIDERS.md`. All OP names referenced below are defined there.
 
@@ -90,7 +100,7 @@ Note: GitHub inline review posting uses `gh api` (see OP: Post inline review in 
 1. Parse `$ARGUMENTS`:
    - Extract `--base <branch>` if present, otherwise use the detected default branch (from the pre-flight "Branch context" block above), falling back to `origin/main`. The detected value is a remote-tracking ref (e.g. `origin/main`), not a local branch name, so diffs and commit logs read against the freshest known state of the default branch rather than a possibly-stale local copy. When passing this value as a `--base`/`--target-branch` argument to a provider CLI (see the `--create-pr` OP), strip the leading `<remote>/` prefix first: GitHub/GitLab expect a bare branch name there, not a git ref path.
    - Extract `--pr <number>` if present — set PR_NUMBER and enable external review mode
-   - Extract `--provider <name>` if present — passed to Provider Detection (valid: `github`, `gitlab`, `bitbucket`)
+   - Extract `--provider <name>` if present — passed to Provider Detection (valid: `github`, `gitlab`, `bitbucket`). Passing it also forces Provider Detection to run in local mode (see Provider Detection step 0).
    - Note mode flags: `--quick`, `--security-only`, `--summary-only`, `--create-pr`,
      `--no-post`/`--local`, `--post-summary`, `--post-findings`, `--no-findings`, `--publish`, `--draft`, `--read-back`, `--no-enrich-context`, `--no-mem`, `--no-suppress`, `--no-cost`
    - Extract `--output-file <path>` if present — set OUTPUT_FILE to the given path for Phase 5 file write
@@ -809,7 +819,7 @@ The grep checks the aggregate diff as a boolean — if it matches anywhere, the 
   **TIER=tiny:** skip.
 - **type-design-analyzer** (subagent_type: `pr-review-toolkit:type-design-analyzer`, model: sonnet) — trigger: type definitions (`type ... struct`, `interface `, `class `, `enum `) in the diff. Pass the full diff when triggered.
   **TIER=tiny:** skip.
-- **issue-linker** (subagent_type: `comprehensive-review:issue-linker`, model: haiku) — pass commit log, branch name, manifest, repo slug, and PROVIDER value. If GOVERNANCE_BLOCK is non-empty, prepend it under `GOVERNANCE:`. Skip in `--quick` and `--pr` modes, and when `--no-post`/`--local` was **explicitly** passed (not the default no-post behavior). Also skipped when PROVIDER is not `github` (agent returns NONE for non-GitHub providers).
+- **issue-linker** (subagent_type: `comprehensive-review:issue-linker`, model: haiku) — pass commit log, branch name, manifest, repo slug, and PROVIDER value. If GOVERNANCE_BLOCK is non-empty, prepend it under `GOVERNANCE:`. Skip in `--quick` and `--pr` modes, and when `--no-post`/`--local` was **explicitly** passed. Also skipped when PROVIDER is not `github` (agent returns NONE for non-GitHub providers) — this includes `PROVIDER=none`, set by Provider Detection's local-mode skip when no remote flag and no `--provider` was passed. Pass `--provider github` to run it in a local review.
 
 Track skipped agents and reasons for Phase 5. Launch all applicable agents simultaneously.
 
@@ -1569,7 +1579,7 @@ Note in terminal: "Review written to <path>"
 1. PR/MR creation outcome:
    - `CREATED_PR_URL` non-empty → "${PR_TERM} created: ${CREATED_PR_URL}".
    - `--create-pr` was passed AND `CREATED_PR_URL` is empty → "${PR_TERM} creation FAILED: ${CREATED_PR_ERROR:-no URL returned by ${PROVIDER} API}".
-   - No `--create-pr` and no PR/MR exists → "Tip: use --create-pr to create a ${PR_TERM_LONG}."
+   - No `--create-pr` and no PR/MR exists (only known when Phase 4 ran; never print this when `PROVIDER=none`) → "Tip: use --create-pr to create a ${PR_TERM_LONG}."
 2. Summary post outcome (skip if Block A was folded into a draft per Phase 4 — that outcome is reported under item 3 instead):
    - `POSTED_COMMENT_REF` non-empty → "Summary comment posted to ${PR_TERM} #<N>: ${POSTED_COMMENT_REF}".
    - `--post-summary` was passed AND `POSTED_COMMENT_REF` is empty → "Summary post FAILED: ${POSTED_COMMENT_ERROR:-no identifier returned by ${PROVIDER} API}".

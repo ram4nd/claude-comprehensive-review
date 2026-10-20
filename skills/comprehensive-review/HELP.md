@@ -58,7 +58,9 @@ Flags
                      Opus agents use extended step-by-step reasoning, and a
                      CVE reachability triage pass annotates which vulns are
                      actually reachable in the diff.
-  --provider <name>  Override git provider detection (github, gitlab, bitbucket)
+  --provider <name>  Override git provider detection (github, gitlab, bitbucket).
+                     Also forces detection in a local review (e.g. --provider
+                     github to run issue-linker without a posting flag).
   --no-enrich-context  Disable symbol context enrichment (Grep-based cross-file definition
                      lookup). Context enrichment is on by default for all full runs except
                      TIER=tiny (<50 lines, ≤3 files) — it adds ~1-3K tokens per eligible
@@ -153,6 +155,10 @@ Examples
 
 Provider support
   Detected automatically from git remote URL. Override with --provider.
+  Detection (and the gh/glab/Bitbucket credential checks) only runs when
+  --pr, --create-pr, --post-summary, --post-findings, --read-back, or
+  --provider is passed. A local review needs no provider CLI and works with
+  any remote (e.g. git.drupal.org); issue-linker is skipped in that case.
   GitHub / GitHub Enterprise:  Full support (gh CLI required). --post-findings
                                stages a pending review by default.
   GitLab:                      Full support (glab CLI required). --post-findings

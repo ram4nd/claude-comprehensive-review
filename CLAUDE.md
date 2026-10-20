@@ -134,7 +134,7 @@ Each agent uses its own severity scale. The skill's `SKILL.md` defines a normali
 Agents are divided into four tiers:
 
 1. **Always-run:** pr-summarizer, code-reviewer — run in every mode including `--quick`
-2. **Full-run only (skip with `--quick`):** architecture-reviewer, security-reviewer, blind-hunter, edge-case-hunter, comment-analyzer, type-design-analyzer, issue-linker (also skipped with `--pr`, `--no-post`/`--local`, and on non-GitHub repos)
+2. **Full-run only (skip with `--quick`):** architecture-reviewer, security-reviewer, blind-hunter, edge-case-hunter, comment-analyzer, type-design-analyzer, issue-linker (also skipped with `--pr`, `--no-post`/`--local`, on non-GitHub repos, and when provider detection is skipped in local mode)
 3. **Conditional (run in both full and `--quick` when triggered by diff content):** silent-failure-hunter (error patterns), pr-test-analyzer (test files)
 4. **Deterministic (non-agent, conditional on manifest files):** `dependency-check` via `scripts/run-cve-check.sh` — runs in both full and `--quick` when `go.mod`, `package.json`, `requirements*.txt`, or `composer.json` appear in the diff
 
@@ -174,6 +174,8 @@ This allows reviewing any accessible PR/MR without being on that branch locally.
 ### Provider abstraction
 
 The skill auto-detects the git hosting provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) from the remote URL in the Provider Detection step of Phase 0. A `--provider` flag allows manual override for self-hosted instances with non-standard hostnames.
+
+Provider Detection (including the `gh`/`glab`/Bitbucket CLI and credential checks) is skipped when none of `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back` (the Phase 4 gate flags) nor `--provider` is passed: the run uses `PROVIDER=none`, generic `PR`/`pull request` terms, a best-effort `REPO_SLUG`, and skips issue-linker. Keep the skip's flag list identical to the Phase 4 gate; `tests/orchestration_contracts.bats` enforces this.
 
 Provider-specific operations (PR metadata, checkout, create, comment, inline review) are defined in the Provider Operations Reference block in SKILL.md. Phases 0, 4, and 4b reference these operations by name rather than hardcoding provider-specific commands.
 

@@ -68,6 +68,52 @@ teardown() {
   grep -q "default branch\|refused.*create-pr\|create-pr.*refused\|refused.*default" "$SKILL_MD"
 }
 
+# ---------------------------------------------------------------------------
+# Provider Detection: skipped in local mode (no remote flag, no --provider)
+# ---------------------------------------------------------------------------
+
+provider_detection_block() {
+  awk '/^### Provider Detection/{f=1;next} /^### /{f=0} f' "$SKILL_MD"
+}
+
+@test "SKILL.md: Provider Detection has a local-mode skip that sets PROVIDER=none" {
+  BLOCK=$(provider_detection_block)
+  echo "$BLOCK" | grep -q "Local-mode skip"
+  echo "$BLOCK" | grep -q "REMOTE_FLAGS=false"
+  echo "$BLOCK" | grep -q "PROVIDER: \`none\`"
+  echo "$BLOCK" | grep -q "including CLI validation"
+  # --provider must still force detection, so self-hosted users keep an override.
+  echo "$BLOCK" | grep -q "AND \`--provider\` was not passed"
+}
+
+@test "SKILL.md: local-mode skip uses the same remote flag set as the Phase 4 skip gate" {
+  flags_of() { grep -o -- '`--[a-z-]*`' | sort -u | tr '\n' ' '; }
+  SKIP_FLAGS=$(provider_detection_block | grep "Local-mode skip" | sed 's/was passed.*//' | flags_of)
+  PHASE4_FLAGS=$(grep "^\*\*Skip entirely unless" "$SKILL_MD" | sed 's/ was explicitly passed.*//' | flags_of)
+  [ -n "$SKIP_FLAGS" ]
+  if [ "$SKIP_FLAGS" != "$PHASE4_FLAGS" ]; then
+    echo "Provider Detection skip flags: $SKIP_FLAGS" >&2
+    echo "Phase 4 gate flags:            $PHASE4_FLAGS" >&2
+    return 1
+  fi
+}
+
+@test "SKILL.md: CLI validation no longer claims to always run" {
+  if provider_detection_block | grep -q "Validate CLI tool availability (always runs"; then
+    echo "REGRESSION: CLI validation runs unconditionally, local reviews need gh/glab again" >&2
+    return 1
+  fi
+}
+
+@test "SKILL.md: issue-linker is skipped when PROVIDER=none" {
+  grep "subagent_type: \`comprehensive-review:issue-linker\`" "$SKILL_MD" | grep -q "PROVIDER=none"
+}
+
+@test "HELP.md and README.md: provider CLIs documented as needed only for remote flags" {
+  grep -q "local review needs no provider CLI" "$HELP_MD"
+  grep -q "local review needs no provider CLI" "$README_MD"
+}
+
 @test "SKILL.md: Write tool is in allowed-tools frontmatter" {
   head -10 "$SKILL_MD" | grep -q '"Write"'
 }

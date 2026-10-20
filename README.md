@@ -44,10 +44,10 @@ In short: pr-review-toolkit agents handle tactical code review. This skill orche
 |-------------|-------|
 | [Claude Code](https://claude.ai/code) | CLI or desktop app |
 | `git` | Required for diff analysis |
-| [gh CLI](https://cli.github.com/) | Required for GitHub / GitHub Enterprise |
-| [glab CLI](https://gitlab.com/gitlab-org/cli) | Required for GitLab |
-| `BITBUCKET_EMAIL` env var | Required for Bitbucket — your Atlassian account email address |
-| `BITBUCKET_TOKEN` env var | Required for Bitbucket — Atlassian API token from `id.atlassian.com` (`BITBUCKET_APP_PASSWORD` is auto-mapped if set) |
+| [gh CLI](https://cli.github.com/) | Required for GitHub / GitHub Enterprise remote operations ³ |
+| [glab CLI](https://gitlab.com/gitlab-org/cli) | Required for GitLab remote operations ³ |
+| `BITBUCKET_EMAIL` env var | Required for Bitbucket remote operations ³ — your Atlassian account email address |
+| `BITBUCKET_TOKEN` env var | Required for Bitbucket remote operations ³ — Atlassian API token from `id.atlassian.com` (`BITBUCKET_APP_PASSWORD` is auto-mapped if set) |
 | `jq` | Required for GitLab and Bitbucket (JSON parsing) |
 | `pr-review-toolkit@claude-plugins-official` | Required plugin — provides code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer |
 | `security-guidance@claude-plugins-official` | Recommended plugin — provides ambient hook-based security review on edits and commits. When installed, comprehensive-review's `security-reviewer` also reads its `claude-security-guidance.md` org-policy file to apply the same codebase-specific security rules. |
@@ -66,6 +66,8 @@ In short: pr-review-toolkit agents handle tactical code review. This skill orche
 
 ¹ Bitbucket does not support inline diff comments via API. Findings are posted as a single PR comment.
 ² Issue cross-referencing is currently GitHub-only. The issue-linker agent is gracefully skipped for other providers.
+
+³ A local review needs no provider CLI. Provider detection and its CLI/credential checks only run when `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, or `--provider` is passed. Without them the review runs with `PROVIDER=none` on any remote (including ones auto-detection does not recognize, such as `git.drupal.org`) and skips issue-linker; pass `--provider github` to run issue-linker in a local review.
 
 ## Installation
 
@@ -204,7 +206,7 @@ Run from any git repository, on the branch you want to review:
 | `--read-back` | Read back your edited draft (GitHub/GitLab only), report what you kept/edited/removed, and stage any newly-noticed findings — on GitLab as additional draft notes; on GitHub, reported in the terminal only (GitHub's API can't append to an existing pending review — add them yourself in the web UI). Requires an existing draft from a prior `--post-findings` run. Never publishes, never overwrites your edits. Costs the same as a full review — it re-runs analysis to regenerate the findings it compares against. |
 | `--no-post` / `--local` | Explicit alias for the default: display everything locally, skip all remote operations (this is the default — posting requires explicit flags) |
 | `--pr <number>` | Review an existing PR/MR by number (external review mode) |
-| `--provider <name>` | Override auto-detected git provider (`github`, `gitlab`, `bitbucket`) |
+| `--provider <name>` | Override auto-detected git provider (`github`, `gitlab`, `bitbucket`). Also forces provider detection in a local review (otherwise skipped) |
 | `--no-enrich-context` | Disable symbol context enrichment (Grep-based cross-file definition lookup). Context enrichment is on by default for all full runs except TIER=tiny (<50 lines, ≤3 files) — it adds ~1–3K tokens per eligible agent but reduces false positives. |
 | `--no-mem` | Disable claude-mem integration (auto-detected when available) |
 | `--no-suppress` | Disable all suppression rules (useful for debugging / audit runs where you want to see every finding) |
@@ -344,7 +346,7 @@ Opus agents (`architecture-reviewer`, `security-reviewer`) use the `opus` alias,
 | **blind-hunter** | Sonnet | Context-free "fresh eyes" review: catches issues familiarity blinds other agents to | Full run only | Raw diff only (no project context) |
 | **edge-case-hunter** | Sonnet | Mechanical path tracing: missing else/default, unguarded inputs, off-by-one, overflow, race conditions, resource leaks | Full run only | Manifest + selective reads ² |
 | **adversarial-general** | Opus | Completeness gaps, missing defenses, operational blindness, documentation debt — what specialist agents are scoped not to cover | Full run only; skipped in TIER=tiny | Manifest + selective reads ² |
-| **issue-linker** | Haiku | Finds referenced issues and related PRs/issues (GitHub only) | Full run only; skipped in `--pr` and when `--no-post`/`--local` is **explicitly** passed, and on non-GitHub repos | Commit log + branch + manifest |
+| **issue-linker** | Haiku | Finds referenced issues and related PRs/issues (GitHub only) | Full run only; skipped in `--pr` and when `--no-post`/`--local` is **explicitly** passed, on non-GitHub repos, and in a local review without `--provider github` (provider detection is skipped there) | Commit log + branch + manifest |
 
 ### Deterministic checks
 

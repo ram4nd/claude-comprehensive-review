@@ -9,6 +9,8 @@ render_with_liquid: false
 
 The skill auto-detects your git hosting provider from the remote URL. Use `--provider <name>` to override for self-hosted instances with non-standard hostnames.
 
+Detection only runs when a flag needs the provider: `--pr`, `--create-pr`, `--post-summary`, `--post-findings`, `--read-back`, or `--provider`. A plain local review (the default) skips it, so it needs no `gh`/`glab`/Bitbucket credentials and works with any remote, including ones auto-detection does not recognize (e.g. `git.drupal.org`). Issue cross-referencing is skipped in that case; pass `--provider github` to enable it in a local review.
+
 ## Feature matrix
 
 | Feature | GitHub / GHE | GitLab | Bitbucket |
