@@ -6,12 +6,16 @@ on:
   # Maintainer-gated review of a fork PR.  The automatic pull_request trigger
   # cannot see secrets on fork PRs, so the `review` job skips them and a
   # maintainer runs this instead, after reading the diff:
-  #   gh workflow run ai-pr-review.yml -f pr_number=<N> [-f review_mode=full]
+  #   gh workflow run ai-pr-review.yml -f pr_number=<N> -f head_sha=<reviewed sha> [-f review_mode=full]
   # Only users with write access can dispatch a workflow.
   workflow_dispatch:
     inputs:
       pr_number:
         description: "Pull request number to review (read the diff first: fork content is untrusted)"
+        required: true
+        type: string
+      head_sha:
+        description: "Head commit SHA you reviewed (40 hex characters). The run fails if the PR head differs."
         required: true
         type: string
       review_mode:
@@ -49,8 +53,9 @@ jobs:
         if: github.event.pull_request.head.repo.full_name != github.repository
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          msg="Fork PR: no automatic AI review ran because this trigger has no secrets. A maintainer must read the diff, then run: gh workflow run ai-pr-review.yml -f pr_number=${PR_NUMBER}"
+          msg="Fork PR: no automatic AI review ran because this trigger has no secrets. A maintainer must read the diff, then run: gh workflow run ai-pr-review.yml -f pr_number=${PR_NUMBER} -f head_sha=${HEAD_SHA}"
           echo "::notice title=No AI review for fork PR::${msg}"
           echo "${msg}" >> "$GITHUB_STEP_SUMMARY"
 
@@ -120,9 +125,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr_number }}
+          REVIEWED_SHA: ${{ inputs.head_sha }}
         run: |
           if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "::error::pr_number must be digits only"
+            exit 1
+          fi
+          if ! [[ "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::head_sha must be 40 lowercase hex characters"
             exit 1
           fi
           # --repo pins the lookup to this repository.
@@ -133,10 +143,16 @@ jobs:
             echo "::error::PR #$PR_NUMBER is $state, not OPEN"
             exit 1
           fi
+          # Bind the run to the commit the maintainer reviewed.
+          current=$(jq -r .headRefOid pr.json)
+          if [[ "$current" != "$REVIEWED_SHA" ]]; then
+            echo "::error::PR head is $current, not the reviewed $REVIEWED_SHA. Read the new diff and dispatch again."
+            exit 1
+          fi
           {
             echo "number=$PR_NUMBER"
             echo "base_ref=$(jq -r .baseRefName pr.json)"
-            echo "head_sha=$(jq -r .headRefOid pr.json)"
+            echo "head_sha=$REVIEWED_SHA"
           } >> "$GITHUB_OUTPUT"
           rm pr.json
 
