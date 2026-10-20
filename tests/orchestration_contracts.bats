@@ -559,6 +559,38 @@ teardown() {
   grep -q "\-\-draft" "$HELP_MD"
 }
 
+@test "SKILL.md: --no-cost is parsed in Phase 0 and listed in argument-hint" {
+  grep -q '^argument-hint:.*\[--no-cost\]' "$SKILL_MD"
+  grep -q '`--no-mem`, `--no-suppress`, `--no-cost`' "$SKILL_MD"
+  grep -q "set NO_COST=true" "$SKILL_MD"
+  grep -q '^| `--no-cost` |' "$SKILL_MD"
+}
+
+@test "SKILL.md: --no-cost prints a tools-only table and skips the pricing lookup" {
+  local step7
+  step7=$(grep '^7\. \*\*Display a token utilization table\*\*' "$SKILL_MD")
+  [[ "$step7" == *"If NO_COST=true, print a tools-only table instead"* ]]
+  [[ "$step7" == *"Omit the Tokens and Est. Cost columns"* ]]
+  [[ "$step7" == *"Do not read \`model-pricing.json\`"* ]]
+  # The table must no longer be skipped or described as unconditionally shown.
+  [[ "$step7" != *"skip this entire step"* ]]
+  # A plain negation (! grep) in the middle of a test never fails it, so use run !.
+  run ! grep -q "always shown, even if no findings" "$SKILL_MD"
+  # The Opus cost tip must not be shown unconditionally.
+  run ! grep -q 'Always show the "Tip: Run on Sonnet' "$SKILL_MD"
+  grep -q 'Tip: Run on Sonnet.*(never when NO_COST=true)' "$SKILL_MD"
+}
+
+@test "SKILL.md: Phase 5 notes when --no-cost hid the cost columns" {
+  grep -q 'If NO_COST=true → note "Token and cost columns hidden (--no-cost)."' "$SKILL_MD"
+}
+
+@test "README.md, HELP.md, docs/usage.md: document --no-cost" {
+  grep -q '^| `--no-cost` |' "$README_MD"
+  grep -q '^  --no-cost ' "$HELP_MD"
+  grep -q '^| `--no-cost` |' "${SCRIPTS_DIR}/../../../docs/usage.md"
+}
+
 # ---------------------------------------------------------------------------
 # Gate decisions for synthetic fixture diffs
 # ---------------------------------------------------------------------------

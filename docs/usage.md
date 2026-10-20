@@ -39,6 +39,7 @@ By default, everything runs locally — no PR is created, no remote posting occu
 | `--no-enrich-context` | Disable symbol context enrichment (Grep-based cross-file definition lookup). Enrichment is on by default for all full runs except TIER=tiny. |
 | `--no-mem` | Disable claude-mem integration (auto-detected when available) |
 | `--no-suppress` | Disable all suppression rules (useful for debugging / audit runs) |
+| `--no-cost` | Hide the cost figures in the Phase 5 table: it keeps the Agent, Model and Tools columns and drops the Tokens and Est. Cost columns, the totals and the Sonnet tip. Analysis and agent selection are unchanged. |
 | `--min-confidence <N>` | Filter findings below this confidence threshold (0–100; default: 75; 0 disables filtering). Applied before suppression rules. |
 | `--output-file <path>` | Write Block A + Block B to a markdown file during Phase 5. Saves ~$5–15 on large PRs by avoiding a separate follow-up request. |
 
